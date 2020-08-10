@@ -3,17 +3,22 @@
 <html lang="en-US">
 
 <head>
+    <title>Ebin chat room</title>
+
     <meta charset="utf-8" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Ebin Bellini Chat Application" />
     <meta name="author" content="Ebin Bellini - ebinbellini@airmail.cc" />
-    <title>Ebin chat room</title>
+
+    <link rel="manifest" href="site.webmanifest" />
 
     <link href="/cabin.css" rel="stylesheet" />
     <link href="/main.css" rel="stylesheet" />
     <link href="/room.css" rel="stylesheet" />
 
+    <!-- TODO ALL ICON SIZES AND TYPES -->
+	<link rel="icon" type="image/png" sizes="96x96" href="imgs/icon.png">
     <script defer src="/main.js"></script>
 </head>
 
@@ -21,12 +26,12 @@
     <div class="center-content">
         <h1 id="welcome">Welcome</h1>
         <main>
-            <div id="input-container">
+            <section id="input-container">
+                <div id="autocompleter"></div>
                 <textarea id="msg_input" rows="1"></textarea>
-                <img id="arrow" src="/arrow32.png">
-            </div>
-            <div id="messages">
-            </div>
+                <img id="arrow" src="imgs/arrow32.png">
+            </section>
+            <section id="messages"></section>
         </main>
     </div>
 </body>

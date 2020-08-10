@@ -32,7 +32,7 @@ h1 {
     line-height: 84px;
 }
 
-h2, h3 {
+h2, h3, h4 {
     text-align: center;
     font-size: 40px;
     font-weight: 700;
@@ -40,6 +40,10 @@ h2, h3 {
 
 h3 {
     font-size: 32px;
+}
+
+h4 {
+    font-size: 18px;
 }
 
 label {
@@ -87,31 +91,6 @@ input[type="Submit"] {
 input[type="Submit"]:active {
     transform: scale(0.9);
 }
-
-/* TODO change to actual button
-.button {
-    position: relative;
-    top: 0;
-    text-decoration: none;
-    display: inline-block;
-    cursor: pointer;
-    font-size: 20px;
-    margin: 0 6px;
-    color: #f5f5f5;
-    font-weight: 500;
-    transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-    border-bottom: 2px solid #ffffff00;
-}
-
-.button:hover {
-    top: -3px;
-    color: #fff;
-    border-bottom: 2px solid #fff;
-}
-
-.button:active {
-    transform: scale(0.95);
-}*/
 
 @media screen and (max-width: 500px) {
     body {

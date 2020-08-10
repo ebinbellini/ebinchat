@@ -1,17 +1,23 @@
 package main
 
 import (
-	//"bytes"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	//"html"
+	webpush "github.com/SherClockHolmes/webpush-go"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
+// Only used for implementing trait for serveHTTP
 type awaitMessageHandler struct {
 }
 
@@ -29,29 +35,61 @@ type Listener struct {
 	Request *http.Request
 	Name    string
 	Used    bool
+	Sent    time.Time
+	Expires time.Time
 }
 
 // Room A room that clients connect to
 type Room struct {
-	Name      string
-	Messages  []Message
-	Listeners []*Listener
+	Name         string
+	Messages     []Message
+	Listeners    []*Listener
+	Subscribers  []Subscriber
+	ImageCount   int
+	MessageCount int
 }
+
+// Subscriber A web push subscription with name of subscriber
+type Subscriber struct {
+	Name   string
+	WebSub *webpush.Subscription
+}
+
+// NotificationContents Contains all the information that is sent through web push
+type NotificationContents struct {
+	Sender string
+	Text   string
+	Name   string // The name of the reciever
+	Room   string
+}
+
+const listenerLifetime = 60 * time.Second
+const messageLimit = 300
+const roomImageLimit = 10
+
+// TODO 48 hours
+const roomImageTimeLimit = 5 * time.Second
 
 var rooms map[string]*Room
 
+var vapidPublic string
+var vapidPrivate string
+
 func main() {
 	rooms = map[string]*Room{}
-	//func TimeoutHandler(h Handler, dt time.Duration, msg string) Handler
-	//http.TimeoutHandler()
+
+	initWebPush()
 
 	http.HandleFunc("/", serveRequest)
 	http.HandleFunc("/sendmessage/", respondToSendMessage)
 	http.HandleFunc("/messages/", respondToGetMessages)
-	http.HandleFunc("/staticattachment/", respondToStaticAttachment)
-	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, 60*time.Second, "FETTO"))
+	http.HandleFunc("/subscribe/", respondToSubscribePush)
+	http.HandleFunc("/images/", respondToGetImage)
+	http.HandleFunc("/vapid/", respondToGetVapidPublic)
+	http.HandleFunc("/uploadfile/", respondToUploadFile)
+	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
 
-	print("Listening on :80...\n")
+	fmt.Println("Listening on port 80...")
 	err := http.ListenAndServe(":80", nil)
 	if err != nil {
 		log.Fatal(err)
@@ -59,42 +97,110 @@ func main() {
 }
 
 func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Någon inväntar meddelande")
-	url := r.URL.Path
-	split := strings.Split(url, "/")
-	fmt.Println("Någon inväntarsdas meddelande 2")
-	if len(split) != 4 {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 5 {
 		serveBadRequest(w, r)
 		return
 	}
-	roomName := split[2]
-	userName := split[3]
+	roomName, err := url.QueryUnescape(split[2])
+	userName, err := url.QueryUnescape(split[3])
+	timeStamp := split[4]
 
-	fmt.Println("Någon inväntarsdas meddelande 3")
+	ms, err := strconv.ParseInt(timeStamp, 10, 64)
+	if err != nil {
+		fmt.Println("Bad timestamp in awaitMessageHandler ServeHTTP ", err)
+		serveBadRequest(w, r)
+		return
+	}
+
+	sent := time.Unix(0, 0)
+	sent = sent.Add(time.Duration(ms) * time.Millisecond)
+	expires := time.Now().Add(listenerLifetime)
+
 	room := rooms[roomName]
 	listener := &Listener{
 		Writer:  w,
 		Request: r,
 		Name:    userName,
 		Used:    false,
+		Sent:    sent,
+		Expires: expires,
 	}
-	fmt.Println("Någon inväntarsdas meddelande 4")
 
 	room.Listeners = append(room.Listeners, listener)
-	fmt.Println("Lyssnare är ", room.Listeners)
-
 	for !listener.Used {
 		time.Sleep(100 * time.Millisecond)
 	}
+	cleanupListeners(room)
+}
 
-	// This crashes the goroutine TODO fix
-	//room.Listeners = removeListener(room.Listeners, listener)
-	fmt.Println("============ TOG BORT EN LYSSNARE =============")
-	fmt.Println(room.Listeners)
+func respondToGetVapidPublic(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, vapidPublic)
+}
+
+func initWebPush() {
+	var err error
+	vapidPrivate, vapidPublic, err = webpush.GenerateVAPIDKeys()
+	if err != nil {
+		fmt.Println("Could not initiate web push", err)
+		return
+	}
+	fmt.Println("vapid publik är", vapidPublic)
+
+	/*
+		// Send Notification
+		resp, err := webpush.SendNotification([]byte("Test"), s, &webpush.Options{
+			Subscriber:      "ebinbellini@airmail.cc",
+			VAPIDPublicKey:  vapidPublic,
+			VAPIDPrivateKey: vapidPrivate,
+			TTL:             30,
+		})
+		if err != nil {
+			fmt.Println("Could not send notification", err)
+			return
+		}
+		defer resp.Body.Close() */
+}
+
+func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Path
+	split := strings.Split(url, "/")
+	if len(split) != 4 {
+		serveBadRequest(w, r)
+		return
+	}
+	roomName := split[2]
+	userName := split[3]
+	fmt.Println(userName, roomName)
+	room := rooms[roomName]
+
+	fmt.Println(url, room)
+
+	// Decode subscription
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+	subscriptionJSON := buf.String()
+	subscription := &webpush.Subscription{}
+	err := json.Unmarshal([]byte(subscriptionJSON), subscription)
+	if err != nil {
+		serveBadRequest(w, r)
+		return
+	}
+	fmt.Println("HÄR KOMMER SLUTPUNKT OCH NYCKLAR TILL DEN")
+	fmt.Println(subscription)
+
+	sub := Subscriber{
+		Name:   userName,
+		WebSub: subscription,
+	}
+
+	room.Subscribers = append(room.Subscribers, sub)
 }
 
 func serveRequest(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
+	// fmt.Println("Trying to serve", url)
 	fp := filepath.Join("static", filepath.Clean(url))
 
 	// First try to serve from static folder
@@ -102,7 +208,6 @@ func serveRequest(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		// Serve static file
 		if !info.IsDir() {
-			fmt.Println("Okje hittade", url)
 			http.ServeFile(w, r, fp)
 		} else {
 			serveFromPages(w, r)
@@ -128,7 +233,6 @@ func serveFromPages(w http.ResponseWriter, r *http.Request) {
 	fp := filepath.Join("pages", filepath.Clean(url))
 	_, err := os.Stat(fp)
 	if err == nil {
-		print("serverar templatead fil\n")
 		http.ServeFile(w, r, fp)
 	} else {
 		if os.IsNotExist(err) {
@@ -152,10 +256,15 @@ func serveBadRequest(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join("pages", "bad.html"))
 }
 
-func removeListener(listeners []*Listener, elm *Listener) []*Listener {
-	i := indexOf(listeners, elm)
-	listeners[i] = listeners[len(listeners)-1]
-	return listeners[:len(listeners)-1]
+func cleanupListeners(room *Room) {
+	unused := []*Listener{}
+	for _, listener := range room.Listeners {
+		// If not used and not expired
+		if !listener.Used && listener.Expires.After(time.Now()) {
+			unused = append(unused, listener)
+		}
+	}
+	room.Listeners = unused
 }
 
 func indexOf(slice []*Listener, elm *Listener) int {
@@ -169,9 +278,12 @@ func indexOf(slice []*Listener, elm *Listener) int {
 
 func createRoom(name string, user string) {
 	rooms[name] = &Room{
-		Name:      name,
-		Messages:  []Message{},
-		Listeners: []*Listener{},
+		Name:         name,
+		Messages:     []Message{},
+		Listeners:    []*Listener{},
+		Subscribers:  []Subscriber{},
+		ImageCount:   0,
+		MessageCount: 0,
 	}
 }
 
@@ -199,27 +311,93 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func respondToStaticAttachment(w http.ResponseWriter, r *http.Request) {
+func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
-	split := strings.Split(url, "/")
-	if len(split) != 5 {
+	file := filepath.Join("images/", strings.Split(url, "/")[2])
+	info, err := os.Stat(file)
+	if err == nil {
+		http.ServeFile(w, r, file)
+		// Remove image if it is old
+		if (info.ModTime().Add(roomImageTimeLimit)).Before(time.Now()) {
+			err := os.Remove(file)
+			if err != nil {
+				fmt.Println("Removing image went wrong", err)
+			}
+		}
+	} else {
+		if os.IsNotExist(err) {
+			// Respond with an image saying that the previous image was removed
+			noImage := filepath.Join("static", "imgs", "removed.png")
+			http.ServeFile(w, r, noImage)
+		} else {
+			serveInternalError(w, r)
+		}
+	}
+}
+
+func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 4 {
 		serveBadRequest(w, r)
 		return
 	}
-	roomName := split[2]
-	userName := split[3]
-	attachmentName := split[4]
+	roomName, err := url.QueryUnescape(split[2])
+	fileName := split[3]
 
-	message := Message{
-		SenderName:     userName,
-		Text:           "",
-		AttachmentPath: attachmentName,
-		TimeStamp:      time.Now(),
+	path := filepath.Join("images", roomName+"_"+fileName)
+	file, err := os.Create(path)
+	if err != nil {
+		fmt.Println("Upload File create file os.Create", err)
+		serveInternalError(w, r)
 	}
+	defer file.Close()
 
 	room := rooms[roomName]
-	sendMessage(message, room)
-	fmt.Fprintln(w, "Success! ▼・ᴥ・▼")
+	room.ImageCount++
+	// Remove oldest image if the room image limit
+	if room.ImageCount > roomImageLimit {
+		for i := len(room.Messages) - 1; i >= 0; i-- {
+			if room.Messages[i].AttachmentPath != "" {
+				removePath := room.Messages[i].AttachmentPath
+				// Maybe insecure TODO check security
+				if strings.HasPrefix(removePath, "images") {
+					err := os.Remove(removePath)
+					if err != nil {
+						fmt.Println(err)
+					} else {
+						room.ImageCount--
+					}
+				}
+			}
+		}
+	}
+
+	bytes := make([]byte, 1024)
+	for {
+		_, err := r.Body.Read(bytes)
+		_, err2 := file.Write(bytes)
+
+		if err == io.EOF {
+			break
+		}
+		if err2 != nil {
+			fmt.Println("Upload File write file", err)
+			break
+		}
+	}
+
+	file.Sync()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(info.ModTime())
+	}
+
+	// Send the path to the created file to the client
+	fmt.Fprint(w, "images/"+roomName+"_"+fileName)
 }
 
 func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
@@ -236,8 +414,8 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	message.TimeStamp = time.Now()
 
 	// Store message in room
-	url := r.URL.Path
-	split := strings.Split(url, "/")
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
 	if len(split) != 3 {
 		serveBadRequest(w, r)
 		return
@@ -247,8 +425,15 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	room := rooms[roomName]
 	sendMessage(message, room)
 
+	// Keep messages within limit
+	room.MessageCount++
+	if room.MessageCount > messageLimit {
+		// Remove oldest message
+		room.Messages = room.Messages[1:]
+	}
+
 	// Respond with success
-	fmt.Fprint(w, "lyckades")
+	fmt.Fprint(w, "アウストラロピテクス")
 }
 
 func sendMessage(message Message, room *Room) {
@@ -257,12 +442,27 @@ func sendMessage(message Message, room *Room) {
 }
 
 func notifyRoomMembers(message Message, room *Room) {
-	fmt.Println("notifierar")
+	fmt.Println("New message in room", room.Name, "from user", message.SenderName)
+	fmt.Println("There are", len(room.Listeners), "listeners in the room", room.Name)
+	handleListeners(room)
+	sendNotificationsInRoom(message, room)
+}
+
+func handleListeners(room *Room) {
 	for _, listener := range room.Listeners {
-		fmt.Println(listener)
-		if !listener.Used {
-			array := [1]Message{message}
-			res, err := json.Marshal(array)
+		// If not used and not expired
+		if !listener.Used && listener.Expires.After(time.Now()) {
+			notRecieved := []*Message{}
+			for i := 0; i < len(room.Messages); i++ {
+				msg := room.Messages[i]
+				if msg.TimeStamp.After(listener.Sent) {
+					notRecieved = append(notRecieved, &msg)
+				}
+			}
+			if len(notRecieved) == 0 {
+				return
+			}
+			res, err := json.Marshal(notRecieved)
 			if err == nil {
 				json.NewEncoder(listener.Writer).Encode(res)
 				listener.Used = true
@@ -270,5 +470,42 @@ func notifyRoomMembers(message Message, room *Room) {
 				serveInternalError(listener.Writer, listener.Request)
 			}
 		}
+	}
+}
+
+func sendNotificationsInRoom(message Message, room *Room) {
+	for _, subscriber := range room.Subscribers {
+		// Don't send notification to the sender
+		if subscriber.Name == message.SenderName {
+			continue
+		}
+
+		// Build notification payload
+		notifContents := &NotificationContents{
+			Sender: message.SenderName,
+			Text:   message.Text,
+			Name:   subscriber.Name,
+			Room:   room.Name,
+		}
+		text, err := json.Marshal(notifContents)
+		if err != nil {
+			fmt.Println("Ja nu jäklar", err)
+		}
+
+		// Send Notification
+		subscription := subscriber.WebSub
+		resp, err := webpush.SendNotification(text, subscription, &webpush.Options{
+			TTL:             30,
+			Topic:           room.Name,
+			Subscriber:      "ebinbellini@airmail.cc",
+			VAPIDPublicKey:  vapidPublic,
+			VAPIDPrivateKey: vapidPrivate,
+		})
+		if err != nil {
+			fmt.Println("Could not send notification", err)
+			return
+		}
+		fmt.Println("Lyckades skicka nottis", resp.Status)
+		defer resp.Body.Close()
 	}
 }

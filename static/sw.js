@@ -1,0 +1,123 @@
+//importScripts('/app/js/cache-polyfill.js');
+
+const CACHE = "バージョン第一";
+// How long user-created images are stored (in seconds)
+const IMAGE_CACHE_TIME = 2 * 24 * 60 * 60 // Two days
+const IMAGE = "写真キャシュだぜ"
+
+self.addEventListener("fetch", event => {
+	event.respondWith(respond(event));
+});
+
+async function respond(event) {
+	//open_database(event);
+
+	// Let cache open in background
+	const cache_promise = caches.match(event.request);
+
+	let fetched_response;
+	try {
+		fetched_response = await fetch(event.request);
+	} catch (error) {
+		// Try cache if fetching fails
+		return cache_promise;
+	}
+
+	// Choose if we use the cache or fetched response
+	if (!fetched_response || fetched_response.status !== 200) {
+		// Fetching status is not OK
+		const cache_response = await cache_promise;
+		if (cache_response != undefined) {
+			return cache_response;
+		} else {
+			// Return erronious response
+			return fetched_response;
+		}
+	} else {
+		// Only cache same-origin requests
+		if (fetched_response.type === 'basic' && event.request.method == "GET") {
+			// Store user-uploaded images separately
+
+			if (event.request.url.split("/")[3] == "images") {
+				const expires = new Date();
+				expires.setSeconds(
+					expires.getSeconds() + IMAGE_CACHE_TIME
+				);
+				const cache_response_fields = {
+					status: fetched_response.status,
+					statusText: fetched_response.status,
+					headers: { "SW-Cache-Expires": expires.toUTCString() }
+				};
+				fetched_response.headers.forEach((value, key) => {
+					cache_response_fields.headers[key] = value;
+				});
+			}
+			// Cache and respond with fetched response
+			var response_to_be_cached = fetched_response.clone();
+			let opened = await caches.open(CACHE)
+			opened.put(event.request, response_to_be_cached);
+		}
+		return fetched_response;
+	}
+}
+
+self.addEventListener("install", event => {
+	event.waitUntil(precache());
+});
+
+function precache() {
+	caches.open(CACHE).then(cache =>
+		cache.addAll([
+			"cabin.css",
+			"main.css",
+			"room.css",
+			"main.js",
+			"imgs/arrow32.png",
+			"imgs/x.png",
+			"imgs/usekta.png",
+			"imgs/ank.gif",
+		]));
+}
+
+self.addEventListener('push', event => {
+	console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);
+	const data = JSON.parse(event.data.text())
+
+	const title = `New message from ${data.Sender}`;
+	const options = {
+		body: data.Text,
+		actions: [
+			{ action: 'open', title: 'Open chat' },
+			{ action: 'mute', title: 'Mute' }
+		],
+		data: data
+	};
+
+	// TODO only when in background
+	event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+	const data = event.notification.data;
+	event.notification.close();
+
+	if (event.action === 'mute') {
+		// TODO mute
+		console.log("Not implemented");
+	} else {
+		// If clicked on open or notification body
+		const url = `/room.html?room=${data.Room}&name=${data.Name}`;
+		event.waitUntil(clients.matchAll({ type: 'window' }).then(clients_arr => {
+			let window_exists = false;
+			for (const client of clients_arr) {
+				if (client.url.includes(url)) {
+					client.focus();
+					window_exists = true;
+				}
+			}
+			if (!window_exists) {
+				clients.openWindow(url);
+			}
+		}));
+	}
+}, false);
