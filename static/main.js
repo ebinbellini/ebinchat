@@ -27,9 +27,11 @@ const commands = [
 	set_send_message_handlers();
 	set_scroll_handler();
 	setTimeout(register_service_worker, 1000);
+	register_service_worker();
 })();
 
 async function register_service_worker() {
+	console.log("Registrerar");
 	if ("serviceWorker" in navigator) {
 		navigator.serviceWorker.register("sw.js");
 

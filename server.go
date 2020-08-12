@@ -89,8 +89,8 @@ func main() {
 	http.HandleFunc("/uploadfile/", respondToUploadFile)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
 
-	fmt.Println("Listening on port 80...")
-	err := http.ListenAndServe(":80", nil)
+	fmt.Println("Listening on port 1337...")
+	err := http.ListenAndServe(":1337", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
