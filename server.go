@@ -2,10 +2,14 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	//"html"
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/dgrijalva/jwt-go"
+	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 	"io"
 	"log"
 	"net/http"
@@ -63,24 +67,33 @@ type NotificationContents struct {
 	Room   string
 }
 
+// SignupFields The fields required to create an account
+type SignupFields struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+}
+
 const listenerLifetime = 60 * time.Second
 const messageLimit = 300
 const roomImageLimit = 10
+const roomImageTimeLimit = 48 * time.Hour
+const bcryptCost = 12
 
-// TODO 48 hours
-const roomImageTimeLimit = 5 * time.Second
-
-var rooms map[string]*Room
-
+var rooms map[string]*Room = map[string]*Room{}
 var vapidPublic string
 var vapidPrivate string
+var hmacshaPrivate []byte
+var sqlDB *sql.DB
 
 func main() {
-	rooms = map[string]*Room{}
-
 	initWebPush()
+	openMySQLDatabase()
+	generateHMACPrivateKey()
 
 	http.HandleFunc("/", serveRequest)
+	http.HandleFunc("/signup", respondToSignUp)
+	http.HandleFunc("/login", respondToLogIn)
 	http.HandleFunc("/sendmessage/", respondToSendMessage)
 	http.HandleFunc("/messages/", respondToGetMessages)
 	http.HandleFunc("/subscribe/", respondToSubscribePush)
@@ -94,6 +107,46 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func generateHMACPrivateKey() {
+	bytes := make([]byte, 256)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		log.Fatal("Failed to generate HMAC key", err)
+	}
+	hmacshaPrivate = bytes
+}
+
+func openMySQLDatabase() {
+	db, err := sql.Open("mysql", "benim:liksomvadeupposv@(127.0.0.1:3306)/echeveria?parseTime=true")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+	sqlDB = db
+
+	createTable("users", `id INT AUTO_INCREMENT,
+		name VARCHAR(25) NOT NULL UNIQUE,
+		password VARCHAR(60) NOT NULL,
+		email VARCHAR(64) NOT NULL UNIQUE,
+		created_at DATETIME,
+		PRIMARY KEY (id)`)
+
+	fmt.Println("Connected to MySQL database 'echeveria'")
+}
+
+func createTable(name, fields string) {
+	query := "CREATE TABLE " + name + " ( " + fields + " );"
+	if _, err := sqlDB.Exec(query); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("Created table", name)
+	}
+
 }
 
 func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +192,22 @@ func respondToGetVapidPublic(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, vapidPublic)
 }
 
+func createUserJWT(id int64, name string) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":   strconv.FormatInt(id, 10),
+		"name": name,
+	})
+
+	// Sign and get the complete encoded token as a string using the secret
+	tokenString, err := token.SignedString(hmacshaPrivate)
+	if err != nil {
+		fmt.Println(err)
+		return ""
+	}
+
+	return tokenString
+}
+
 func initWebPush() {
 	var err error
 	vapidPrivate, vapidPublic, err = webpush.GenerateVAPIDKeys()
@@ -146,21 +215,54 @@ func initWebPush() {
 		fmt.Println("Could not initiate web push", err)
 		return
 	}
-	fmt.Println("vapid publik är", vapidPublic)
+	fmt.Println("Web push initiated")
+}
 
-	/*
-		// Send Notification
-		resp, err := webpush.SendNotification([]byte("Test"), s, &webpush.Options{
-			Subscriber:      "ebinbellini@airmail.cc",
-			VAPIDPublicKey:  vapidPublic,
-			VAPIDPrivateKey: vapidPrivate,
-			TTL:             30,
-		})
-		if err != nil {
-			fmt.Println("Could not send notification", err)
-			return
-		}
-		defer resp.Body.Close() */
+func respondToSignUp(w http.ResponseWriter, r *http.Request) {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+	signupJSON := buf.String()
+	fmt.Println(signupJSON)
+	signup := &SignupFields{}
+	err := json.Unmarshal([]byte(signupJSON), signup)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// BCrypt automatically salts passwords
+	hash, err := bcrypt.GenerateFromPassword([]byte(signup.Password), bcryptCost)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+	signup.Password = string(hash)
+
+	query := `INSERT INTO users (email, password, name, created_at) VALUES (?, ?, ?, ?);`
+	result, err := sqlDB.Exec(query, signup.Email, signup.Password, signup.Name, time.Now())
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Send authentication token
+	token := createUserJWT(id, signup.Name)
+	fmt.Fprint(w, token)
+}
+
+func respondToLogIn(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("loggar in LOLE TODO")
+	return
 }
 
 func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {

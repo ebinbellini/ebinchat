@@ -9,34 +9,98 @@
 	<meta name="author" content="Ebin Bellini - ebinbellini@airmail.cc" />
 	<title>Echeveria Chat</title>
 
-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
-    <link rel="manifest" href="/icons/site.webmanifest">
-    <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#5a9271">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
-    <meta name="msapplication-TileColor" content="#5b9b79">
-    <meta name="msapplication-config" content="/icons/browserconfig.xml">
-	<meta name="theme-color" content="#fafafa">
+	<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+	<link rel="manifest" href="/icons/site.webmanifest">
+	<link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#5a9271">
+	<link rel="shortcut icon" href="/icons/favicon.ico">
+	<meta name="msapplication-TileColor" content="#5b9b79">
+	<meta name="msapplication-config" content="/icons/browserconfig.xml">
+
+	<meta name="apple-mobile-web-app-title" content="Echeveria">
+	<meta name="application-name" content="Echeveria" />
+	<meta name="msapplication-TileColor" content="#5a9271" />
+	<meta name="theme-color" content="#5a9271" />
+	<meta name="twitter:card" content="Echeveria, the nicest messaging platform" />
 
 	<link href="/main.css" rel="stylesheet" />
+	<link href="/field.css" rel="stylesheet" />
 	<link href="/cabin.css" rel="stylesheet" />
+
+	<script src="main.js"></script>
 </head>
 
 <body>
-	<div class="center-content">
-		<h1>Ebin Chat</h1>
-		<form action="/room.html" method="GET">
-			<div class="form-input">
-				<label for="room">Room name</label>
-				<input id="room" name="room" type="text" required/>
+	<h1 id="app-title">Echeveria</h1>
+	<img id="app-logo" src="icons/EcheveriaLogga.png" />
+	<section id="auth-form-container">
+		<form id="login" onsubmit="return submit_login_form()">
+			<h2 style="padding-bottom: 16px;">Log in</h2>
+			<div class="form-element form-input">
+				<input id="login-email" class="form-element-field" placeholder="Type your email, bucko" type="input"
+					required />
+				<div class="form-element-bar"></div>
+				<label class="form-element-label" for="login-email">Email</label>
 			</div>
-			<div class="form-input">
-				<label for="name">Your name</label>
-				<input id="name" name="name" type="text" required/>
+
+			<div class="form-element form-input">
+				<input id="login-password" class="form-element-field" placeholder="Any format you want" type="password"
+					required />
+				<div class="form-element-bar"></div>
+				<label class="form-element-label" for="login-password">Password</label>
 			</div>
-			<input type="submit" value="Enter" />
+
+			<div class="center-content">
+				<div class="button" onclick="submit_login_form()" tabindex=0>Submit</div>
+			</div>
+			<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
+			<br clear="both" />
+			<hr class="divider" style="margin-bottom: 12px; margin-top: -4px" />
+			No account yet?
+			<b class="button-flat" onclick="display_other_form()">SIGN UP</b>
+			<br/>
+			<a href="/help">Help</a>
+			<a href="/tos">Terms</a>
+			<a href="/privacy">Privacy</a>
 		</form>
+
+		<form id="signup" onsubmit="return submit_signup_form()">
+			<h2 style="padding-top: 20px; padding-bottom: 16px;">Sign up</h2>
+			<div class="form-element form-input">
+				<input id="email" class="form-element-field" placeholder="Type your email, bucko" type="email"
+					required />
+				<div class="form-element-bar"></div>
+				<label class="form-element-label" for="email">Email</label>
+			</div>
+
+			<div class="form-element form-input">
+				<input id="password" class="form-element-field" placeholder="Any format you want" type="password"
+					required />
+				<div class="form-element-bar"></div>
+				<label class="form-element-label" for="password">Password</label>
+			</div>
+
+			<div class="form-element form-input">
+				<input id="display-name" class="form-element-field" placeholder="そらまめ" type="input" required />
+				<div class="form-element-bar"></div>
+				<label class="form-element-label" for="display-name">Display name</label>
+			</div>
+			<div class="center-content">
+				<div class="button" onclick="submit_signup_form()" tabindex=0>Submit</div>
+			</div>
+			<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
+			<br clear="all" />
+			<hr class="divider" style="margin-bottom: 12px; margin-top: -4px" />
+			Already have an account?
+			<b class="button-flat" style="float: right; margin-top: -6px;  padding: 0 14px;"
+				onclick="display_other_form()">LOG IN</b>
+			<br />
+			<a href="/help" style="margin-top: 8px;">Help</a>
+			<a href="/tos">Terms</a>
+			<a href="/privacy">Privacy</a>
+		</form>
+	</section>
 </body>
 
 </html>

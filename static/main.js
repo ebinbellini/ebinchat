@@ -17,18 +17,167 @@ const commands = [
 	{ name: "1337", func: elit, arg: "none", info: "Eliiiiiiiit", extended: "Fett kool elit låda liksom." },
 ];
 
-(function main() {
-	set_background();
+window.onload = main;
+function main() {
+	scale_in_title();
+	set_background_position();
+	click_form_input();
+	check_logged_in();
+	/*set_background();
 	const values = query_string_values();
 	room_name = values[0];
 	user_name = values[1];
-	setTimeout(zoom_in_title, 200);
 	get_messages();
 	set_send_message_handlers();
 	set_scroll_handler();
 	setTimeout(register_service_worker, 1000);
-	register_service_worker();
-})();
+	register_service_worker();*/
+}
+function set_background_position() {
+	const x = Math.floor(Math.random() * 790) - 395;
+	console.log("x = ", x);
+	const y = Math.sqrt(400 * 400 - x * x);
+	console.log("y = ", y);
+	console.log("d = ", Math.sqrt(x * x + y * y));
+	document.body.style.backgroundPosition = `${x}px ${y}px`;
+}
+
+function click_form_input() {
+	const form = document.getElementById("auth-form-container");
+	const inputs = Array.from(form.querySelectorAll("input")).reverse();
+	setTimeout(() => {
+		for (const input of inputs) {
+			if (input.classList.contains("form-element-field")) {
+				input.focus({
+					preventScroll: true
+				});
+			}
+		}
+	}, 500);
+}
+
+function submit_signup_form(e) {
+	const form = document.getElementById("signup");
+	const values = form_values(form);
+	console.log(values);
+	if (values) {
+		fetch("/signup", {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(values)
+		}).then(response => {
+			console.log(response);
+			response.text().then(text => {
+				console.log("Svaret är ", text);
+			})
+			/*if (!response.ok) {
+				// TODO handle errors
+			}*/
+		});
+	}
+	return false;
+}
+
+function submit_login_form(e) {
+	return false;
+}
+
+function form_values(form) {
+	"use strict";
+	const inputs = form.querySelectorAll(`input:not([type="submit"])`);
+	const names = ["email", "password", "name"];
+	let valid = true;
+	let values = {};
+	for (let i = 0; i < inputs.length; i++) {
+		if (inputs[i].validity.valid) {
+			values[names[i]] = inputs[i].value;
+		} else {
+			if (inputs[i].value == "") {
+				display_snackbar(`Your ${names[i]} is empty`);
+			} else {
+				display_snackbar(`Your ${names[i]} is badly formatted`);
+			}
+			valid = false;
+		}
+	}
+	// Return false if form is invalid, else return form values
+	return valid ? values : false;
+}
+
+function display_form() {
+	const form = document.getElementById("auth-form-container");
+	form.classList.add("fade-in");
+}
+
+function scale_in_title() {
+	const title = document.getElementById("app-title");
+	title.classList.add("scale-in");
+
+	setTimeout(() => {
+		const logo = document.getElementById("app-logo");
+		logo.classList.add("scale-in");
+	}, 300);
+}
+
+function check_logged_in() {
+	// TODO check if logged in
+	setTimeout(() => {
+		float_title();
+		display_form();
+	}, 600);
+}
+
+function float_title() {
+	const title = document.getElementById("app-title");
+	title.classList.add("float-up");
+
+	const logo = document.getElementById("app-logo");
+	logo.classList.add("float-up");
+}
+
+function display_other_form() {
+	document.getElementById("auth-form-container").classList.toggle("show-next");
+}
+
+// Displays a message at the bottom of the screen for 4 seconds
+function display_snackbar(message) {
+	let container = document.getElementById("snackbar-container");
+	if (!container)
+		container = create_snackbar_container();
+
+	const snackbar = create_snackbar(message);
+	container.appendChild(snackbar);
+
+	requestAnimationFrame(() =>
+		requestAnimationFrame(() => {
+			snackbar.classList.add("slideUp");
+			setTimeout(() => {
+				snackbar.classList.remove("slideUp");
+				setTimeout(() => {
+					snackbar.parentNode.removeChild(snackbar);
+				}, 225);
+			}, 4000);
+		})
+	);
+}
+
+function create_snackbar_container() {
+	const container = document.createElement("div");
+	container.setAttribute("id", "snackbar-container");
+	return document.body.appendChild(container);
+}
+
+function create_snackbar(message) {
+	const snackbar = document.createElement("div");
+	snackbar.classList.add("snackbar");
+	snackbar.innerHTML = `<span class="snackbar-content">
+		${message}
+	</span>`;
+	return snackbar;
+}
+
 
 async function register_service_worker() {
 	console.log("Registrerar");
