@@ -23,6 +23,7 @@ function main() {
 	set_background_position();
 	click_form_input();
 	check_logged_in();
+	init_ripple();
 	/*set_background();
 	const values = query_string_values();
 	room_name = values[0];
@@ -33,13 +34,10 @@ function main() {
 	setTimeout(register_service_worker, 1000);
 	register_service_worker();*/
 }
+
 function set_background_position() {
-	const x = Math.floor(Math.random() * 790) - 395;
-	console.log("x = ", x);
-	const y = Math.sqrt(400 * 400 - x * x);
-	console.log("y = ", y);
-	console.log("d = ", Math.sqrt(x * x + y * y));
-	document.body.style.backgroundPosition = `${x}px ${y}px`;
+	const y = Math.floor(Math.random() * 400) + 200;
+	document.body.style.backgroundPosition = `0 ${y}px`;
 }
 
 function click_form_input() {
@@ -59,7 +57,6 @@ function click_form_input() {
 function submit_signup_form(e) {
 	const form = document.getElementById("signup");
 	const values = form_values(form);
-	console.log(values);
 	if (values) {
 		fetch("/signup", {
 			method: 'POST',
@@ -68,19 +65,48 @@ function submit_signup_form(e) {
 			},
 			body: JSON.stringify(values)
 		}).then(response => {
-			console.log(response);
-			response.text().then(text => {
-				console.log("Svaret är ", text);
-			})
-			/*if (!response.ok) {
+			if (!response.ok) {
 				// TODO handle errors
-			}*/
+				response.text().then(text => {
+					if (text.startsWith("Error 1062")) {
+						if (text.endsWith('users.name')) {
+							display_snackbar("The name " + values.name + " has already been taken");
+						} else {
+							display_snackbar("The email " + values.email + " is already in use");
+						}
+					} else {
+						display_snackbar("An unknown error occurred!");
+					}
+				});
+			} else {
+				display_logged_in_ui();
+			}
 		});
 	}
 	return false;
 }
 
 function submit_login_form(e) {
+	const form = document.getElementById("login");
+	const values = form_values(form);
+	if (values) {
+		fetch("/login", {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(values)
+		}).then(response => {
+			if (!response.ok) {
+				// TODO handle errors
+				response.text().then(text => {
+					display_snackbar(text);
+				});
+			} else {
+				display_logged_in_ui();
+			}
+		});
+	}
 	return false;
 }
 
@@ -102,13 +128,103 @@ function form_values(form) {
 			valid = false;
 		}
 	}
+	if (inputs.length === 3 && values.password.length < 8) {
+		// TODO make form field red
+		display_snackbar("Your password has to be at least 8 characters long");
+		valid = false;
+	}
 	// Return false if form is invalid, else return form values
 	return valid ? values : false;
 }
 
 function display_form() {
+	float_title();
 	const form = document.getElementById("auth-form-container");
 	form.classList.add("fade-in");
+}
+
+// https://stackoverflow.com/questions/38552003/how-to-decode-jwt-token-in-javascript-without-using-a-library
+function parse_jwt(token) {
+	const base64_url = token.split('.')[1];
+	const base64 = base64_url.replace(/-/g, '+').replace(/_/g, '/');
+	const json_payload = decodeURIComponent(atob(base64).split('').map(function (c) {
+		return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+	}).join(''));
+
+	return JSON.parse(json_payload);
+}
+
+function find_cookie(name) {
+	for (const cookie of document.cookie.split("; ")) {
+		if (cookie.startsWith(name)) {
+			return cookie.split("=")[1];
+		}
+	}
+	return false;
+}
+
+function check_logged_in() {
+	const login = () => setTimeout(display_form, 600);
+	const auth = find_cookie("auth")
+	if (auth) {
+		const token = JSON.parse(atob(auth.split('.')[1]))
+		if (is_auth_token_valid(token)) {
+			setTimeout(display_logged_in_ui, 600);
+		} else {
+			login();
+		}
+	} else {
+		login();
+	}
+}
+
+function display_logged_in_ui() {
+	fade_out_title();
+	hide_login_form();
+	remove_background();
+	//load_account_screen_info();
+	setTimeout(show_main, 100);
+	setTimeout(() => {
+		login.style.display = "none";
+	}, 250);
+}
+
+function show_main() {
+	const main = document.getElementsByTagName("main")[0];
+	main.style.display = "block";
+	requestAnimationFrame(() => {
+		main.classList.add("displayed");
+	});
+}
+
+function fade_out_title() {
+	const app_title = document.getElementById("app-title");
+	app_title.classList.add("fade-out");
+
+	const logo = document.getElementById("app-logo");
+	logo.classList.add("fade-out");
+
+	setTimeout(() => {
+		logo.style.display = "none";
+		app_title.style.display = "none";
+	}, 250);
+}
+
+function hide_login_form() {
+	const login = document.getElementById("auth-form-container");
+	login.classList.remove("fade-in");
+	setTimeout(() => {
+		login.style.display = "none";
+	}, 250);
+}
+
+function remove_background() {
+	document.body.classList.add("remove-background")
+}
+
+function is_auth_token_valid(token) {
+	const expiration = token.exp * 1000;
+	return expiration > Date.now();
 }
 
 function scale_in_title() {
@@ -119,14 +235,6 @@ function scale_in_title() {
 		const logo = document.getElementById("app-logo");
 		logo.classList.add("scale-in");
 	}, 300);
-}
-
-function check_logged_in() {
-	// TODO check if logged in
-	setTimeout(() => {
-		float_title();
-		display_form();
-	}, 600);
 }
 
 function float_title() {
@@ -828,6 +936,7 @@ function say(text) {
 }
 
 function kao(number) {
+	// TODO
 	send_message("▼・ᴥ・▼");
 }
 

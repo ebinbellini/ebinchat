@@ -29,6 +29,7 @@
 	<link href="/cabin.css" rel="stylesheet" />
 
 	<script src="main.js"></script>
+	<script src="ripple.js"></script>
 </head>
 
 <body>
@@ -52,14 +53,15 @@
 			</div>
 
 			<div class="center-content">
-				<div class="button" onclick="submit_login_form()" tabindex=0>Submit</div>
+				<div class="button ripple" onclick="submit_login_form()" tabindex=0>Submit</div>
 			</div>
 			<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
 			<br clear="both" />
 			<hr class="divider" style="margin-bottom: 12px; margin-top: -4px" />
-			No account yet?
-			<b class="button-flat" onclick="display_other_form()">SIGN UP</b>
-			<br/>
+			Don't have an account?
+			<b class="button-flat ripple" style="float: right; margin-top: -6px; padding: 0 14px;"
+				onclick="display_other_form()">SIGN UP</b>
+			<br style="margin-bottom: 8px " clear="both" />
 			<a href="/help">Help</a>
 			<a href="/tos">Terms</a>
 			<a href="/privacy">Privacy</a>
@@ -87,20 +89,55 @@
 				<label class="form-element-label" for="display-name">Display name</label>
 			</div>
 			<div class="center-content">
-				<div class="button" onclick="submit_signup_form()" tabindex=0>Submit</div>
+				<div class="button ripple" onclick="submit_signup_form()" tabindex=0>Submit</div>
 			</div>
 			<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
 			<br clear="all" />
 			<hr class="divider" style="margin-bottom: 12px; margin-top: -4px" />
 			Already have an account?
-			<b class="button-flat" style="float: right; margin-top: -6px;  padding: 0 14px;"
+			<b class="button-flat ripple" style="float: right; margin-top: -6px;  padding: 0 14px;"
 				onclick="display_other_form()">LOG IN</b>
-			<br />
-			<a href="/help" style="margin-top: 8px;">Help</a>
+			<br style="margin-top: 6px;" clear="both" />
+			<a href="/help">Help</a>
 			<a href="/tos">Terms</a>
 			<a href="/privacy">Privacy</a>
 		</form>
 	</section>
+
+	<main>
+		<div class="title">Echeveria</div>
+		<div id="profile-picture"></div>
+		<div class="search-bar">
+			<input type="text" placeholder="Search Contacts">
+			<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
+				xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" version="1.1"
+				viewBox="0 0 6.35 6.35" height="24" width="24">
+				<path
+					d="M 4.2336235,2.2489583 A 1.9846654,1.9846656 0 0 1 2.249088,4.233624 1.9846654,1.9846656 0 0 1 0.26429273,2.2492181 1.9846654,1.9846656 0 0 1 2.2485684,0.26429276 1.9846654,1.9846656 0 0 1 4.2336234,2.2484387"
+					sodipodi:arc-type="arc" sodipodi:open="true" sodipodi:end="6.2829235" sodipodi:start="0"
+					sodipodi:ry="1.9846656" sodipodi:rx="1.9846654" sodipodi:cy="2.2489583" sodipodi:cx="2.2489581"
+					sodipodi:type="arc" id="path833"
+					style="fill:none;fill-opacity:1;stroke:#888;stroke-width:0.528585;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+				<path id="path843" d="M 3.6155998,3.6149312 6.1739834,6.1878656 Z"
+					style="fill:none;stroke:#888;stroke-width:0.496894;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+			</svg>
+			<div class="cancel">CANCEL</div>
+		</div>
+
+		<div class="subtitle">
+			Favorites
+		</div>
+		<div>
+
+		</div>
+
+		<div class="subtitle">
+			Chat
+		</div>
+		<div>
+
+		</div>
+	</main>
 </body>
 
 </html>

@@ -79,7 +79,9 @@ const messageLimit = 300
 const roomImageLimit = 10
 const roomImageTimeLimit = 48 * time.Hour
 const bcryptCost = 12
+const authTokenLifetime = 24 * 31 * time.Hour
 
+// Global variables
 var rooms map[string]*Room = map[string]*Room{}
 var vapidPublic string
 var vapidPrivate string
@@ -87,6 +89,7 @@ var hmacshaPrivate []byte
 var sqlDB *sql.DB
 
 func main() {
+	fmt.Println("サーバーをスタートします…")
 	initWebPush()
 	openMySQLDatabase()
 	generateHMACPrivateKey()
@@ -102,7 +105,7 @@ func main() {
 	http.HandleFunc("/uploadfile/", respondToUploadFile)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
 
-	fmt.Println("Listening on port 1337...")
+	fmt.Println("1337のポートを待機しています...")
 	err := http.ListenAndServe(":1337", nil)
 	if err != nil {
 		log.Fatal(err)
@@ -113,7 +116,7 @@ func generateHMACPrivateKey() {
 	bytes := make([]byte, 256)
 	_, err := rand.Read(bytes)
 	if err != nil {
-		log.Fatal("Failed to generate HMAC key", err)
+		log.Fatal("Failed to generate HMACキーを", err)
 	}
 	hmacshaPrivate = bytes
 }
@@ -136,7 +139,7 @@ func openMySQLDatabase() {
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
 
-	fmt.Println("Connected to MySQL database 'echeveria'")
+	fmt.Println("「echeveria」というなMySQLデータベースにコネクトしました")
 }
 
 func createTable(name, fields string) {
@@ -144,7 +147,7 @@ func createTable(name, fields string) {
 	if _, err := sqlDB.Exec(query); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println("Created table", name)
+		fmt.Println("「", name, "」というなテーブルを作った")
 	}
 
 }
@@ -162,8 +165,8 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 
 	ms, err := strconv.ParseInt(timeStamp, 10, 64)
 	if err != nil {
-		fmt.Println("Bad timestamp in awaitMessageHandler ServeHTTP ", err)
-		serveBadRequest(w, r)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
 		return
 	}
 
@@ -192,10 +195,10 @@ func respondToGetVapidPublic(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, vapidPublic)
 }
 
-func createUserJWT(id int64, name string) string {
+func createUserJWT(id int64) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":   strconv.FormatInt(id, 10),
-		"name": name,
+		"id":  strconv.FormatInt(id, 10),
+		"exp": time.Now().Add(authTokenLifetime).Unix(),
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
@@ -212,17 +215,17 @@ func initWebPush() {
 	var err error
 	vapidPrivate, vapidPublic, err = webpush.GenerateVAPIDKeys()
 	if err != nil {
-		fmt.Println("Could not initiate web push", err)
+		fmt.Println("ウェブプッシュを開始するできませんでした", err)
 		return
 	}
-	fmt.Println("Web push initiated")
+	fmt.Println("ウェブプッシュを開始しました")
 }
 
 func respondToSignUp(w http.ResponseWriter, r *http.Request) {
+	// Decode request body
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(r.Body)
 	signupJSON := buf.String()
-	fmt.Println(signupJSON)
 	signup := &SignupFields{}
 	err := json.Unmarshal([]byte(signupJSON), signup)
 	if err != nil {
@@ -231,6 +234,7 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hash pasword
 	// BCrypt automatically salts passwords
 	hash, err := bcrypt.GenerateFromPassword([]byte(signup.Password), bcryptCost)
 	if err != nil {
@@ -240,6 +244,8 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 	signup.Password = string(hash)
 
+	// Store user in database
+	// Errors if someone else is using the same email or name
 	query := `INSERT INTO users (email, password, name, created_at) VALUES (?, ?, ?, ?);`
 	result, err := sqlDB.Exec(query, signup.Email, signup.Password, signup.Name, time.Now())
 	if err != nil {
@@ -248,6 +254,7 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the unique ID of the newly created user
 	id, err := result.LastInsertId()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -255,14 +262,60 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send authentication token
-	token := createUserJWT(id, signup.Name)
-	fmt.Fprint(w, token)
+	// Create and send authentication token
+	token := createUserJWT(id)
+	// Expires after 31 days (one month)
+	cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
+	http.SetCookie(w, cookie)
+	fmt.Fprint(w, "Success! ▼・ᴥ・▼")
 }
 
 func respondToLogIn(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("loggar in LOLE TODO")
-	return
+	// Decode request body
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+	loginJSON := buf.String()
+	login := &SignupFields{}
+	err := json.Unmarshal([]byte(loginJSON), login)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	rows, err := sqlDB.Query("SELECT id, password FROM users WHERE email=?", login.Email)
+	// TODO SEE WHAT HAPPENS WHEN YOU SEARCH FOR A USER THAT DOES NOT EXIST
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, "Could not find a user with that combination of email and password")
+	}
+	defer rows.Close()
+	rows.Next()
+	var id, password string
+	if err := rows.Scan(&id, &password); err != nil {
+		fmt.Fprint(w, err)
+	}
+
+	// Check if password is correct
+	err = bcrypt.CompareHashAndPassword([]byte(password), []byte(login.Password))
+	if err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, "Could not find a user with that combination of email and password")
+	} else {
+		// Succesfully authenticated
+		idInt, err := strconv.Atoi(id)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err)
+		}
+
+		// Create and send authentication token
+		token := createUserJWT(int64(idInt))
+		// Expires after 31 days (one month)
+		cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
+		http.SetCookie(w, cookie)
+		fmt.Fprintln(w, "Authenticated!")
+	}
 }
 
 func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
@@ -274,10 +327,7 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 	}
 	roomName := split[2]
 	userName := split[3]
-	fmt.Println(userName, roomName)
 	room := rooms[roomName]
-
-	fmt.Println(url, room)
 
 	// Decode subscription
 	buf := new(bytes.Buffer)
@@ -289,8 +339,6 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 		serveBadRequest(w, r)
 		return
 	}
-	fmt.Println("HÄR KOMMER SLUTPUNKT OCH NYCKLAR TILL DEN")
-	fmt.Println(subscription)
 
 	sub := Subscriber{
 		Name:   userName,
@@ -302,7 +350,6 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 
 func serveRequest(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
-	// fmt.Println("Trying to serve", url)
 	fp := filepath.Join("static", filepath.Clean(url))
 
 	// First try to serve from static folder
@@ -423,7 +470,7 @@ func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 		if (info.ModTime().Add(roomImageTimeLimit)).Before(time.Now()) {
 			err := os.Remove(file)
 			if err != nil {
-				fmt.Println("Removing image went wrong", err)
+				fmt.Println("写真を削除できませんでした", err)
 			}
 		}
 	} else {
@@ -450,7 +497,7 @@ func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join("images", roomName+"_"+fileName)
 	file, err := os.Create(path)
 	if err != nil {
-		fmt.Println("Upload File create file os.Create", err)
+		fmt.Println("ファイルのアップロード失敗した", err)
 		serveInternalError(w, r)
 	}
 	defer file.Close()
@@ -484,7 +531,7 @@ func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err2 != nil {
-			fmt.Println("Upload File write file", err)
+			fmt.Println("ファイルを書くの失敗した", err)
 			break
 		}
 	}
@@ -544,8 +591,8 @@ func sendMessage(message Message, room *Room) {
 }
 
 func notifyRoomMembers(message Message, room *Room) {
-	fmt.Println("New message in room", room.Name, "from user", message.SenderName)
-	fmt.Println("There are", len(room.Listeners), "listeners in the room", room.Name)
+	fmt.Println(room.Name, "に新しいメッセージが", message.SenderName, "から来た")
+	fmt.Println(room.Name, "のルームには", len(room.Listeners), "つリスナーがあります")
 	handleListeners(room)
 	sendNotificationsInRoom(message, room)
 }
@@ -591,7 +638,7 @@ func sendNotificationsInRoom(message Message, room *Room) {
 		}
 		text, err := json.Marshal(notifContents)
 		if err != nil {
-			fmt.Println("Ja nu jäklar", err)
+			fmt.Println("おかしいなあ", err)
 		}
 
 		// Send Notification
@@ -604,10 +651,10 @@ func sendNotificationsInRoom(message Message, room *Room) {
 			VAPIDPrivateKey: vapidPrivate,
 		})
 		if err != nil {
-			fmt.Println("Could not send notification", err)
+			fmt.Println("通知を送信できませんでした", err)
 			return
 		}
-		fmt.Println("Lyckades skicka nottis", resp.Status)
+		fmt.Println("通知を送信できました　いいね！", resp.Status)
 		defer resp.Body.Close()
 	}
 }
