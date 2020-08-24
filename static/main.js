@@ -6,11 +6,6 @@ let last_message_time = 1337;
 
 const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
-	{ name: "img", func: img, arg: "none", info: "Send an image.", extended: "Click on the box that appears to upload your image." },
-	{ name: "goto", func: goto, arg: "string", info: "Jump to a different room.", extended: "Type /goto room to go to a room called \"room\" and keep you username." },
-	{ name: "name", func: name, arg: "string", info: "Change your name.", extended: "Type /name bengan to change your name to bengan." },
-	{ name: "bg", func: bg, arg: "number", info: "Changes the background-image.", extended: "Type /bg 1 to set the background to background image 1. Type /bg 0 to disable. /bg for a random background. There are 8 different pictures." },
-	{ name: "kao", func: kao, arg: "number", info: "Smileys", extended: "There's only one at the moment." },
 	{ name: "say", func: say, arg: "string", info: "Speak your mind.", extended: "Type /say /say to say /say." },
 	{ name: "dance", func: dance, arg: "number", info: "Use this to dance.", extended: "Type for example /dance 3 for dance number three or /dance for a radnom dance. There are 8 different dances." },
 	{ name: "beer", func: beer, arg: "none", info: "Use this to beer.", extended: "Beer! Very unhealthy." },
@@ -24,15 +19,7 @@ function main() {
 	click_form_input();
 	check_logged_in();
 	init_ripple();
-	/*set_background();
-	const values = query_string_values();
-	room_name = values[0];
-	user_name = values[1];
-	get_messages();
-	set_send_message_handlers();
-	set_scroll_handler();
-	setTimeout(register_service_worker, 1000);
-	register_service_worker();*/
+	//register_service_worker();
 }
 
 function set_background_position() {
@@ -327,14 +314,6 @@ async function register_service_worker() {
 				})
 			});
 		});
-	}
-}
-
-function set_background() {
-	const main = document.querySelector("main");
-	const number = localStorage.getItem("bg");
-	if (number && parseInt(number) !== Math.NaN && number !== "0") {
-		main.style.backgroundImage = `url(backgrounds/bg${parseInt(number)}.jpg)`;
 	}
 }
 
@@ -702,7 +681,6 @@ function matches_type(type, value) {
 }
 
 function await_messages() {
-	// This works
 	get("awaitmessages", last_message_time).then(response => {
 		if (!response.ok) {
 			response.text().then(body => {
@@ -726,14 +704,6 @@ function await_messages() {
 	}).catch(error => {
 		disconnected("Failed to connect");
 	});
-}
-
-function disconnected(reason) {
-	display_dialog(`<div class="center-content">
-			<h3>You have been disconnected</h3>
-			<h4>${reason}</h4>
-		</div>
-		<div class="button" style="margin-top: 12px" onclick="reconnect()">Reconnect</div>`);
 }
 
 function reconnect() {
@@ -780,42 +750,6 @@ function display_command_message(message) {
 	insert_message(container);
 }
 
-function send_attachment(path) {
-	post_message_object({
-		SenderName: user_name,
-		Text: "",
-		AttachmentPath: path,
-		TimeStamp: undefined
-	}, room_name);
-}
-
-function display_dialog(content) {
-	const dialog = document.createElement("div");
-	dialog.classList.add("dialog");
-	dialog.innerHTML = content;
-
-	const exit_button = document.createElement("img");
-	exit_button.setAttribute("class", "clickable exit-button");
-	exit_button.src = "imgs/x.png";
-	exit_button.addEventListener("click", hide_all_dialogs);
-	dialog.appendChild(exit_button);
-
-	document.body.appendChild(dialog);
-	requestAnimationFrame(() => {
-		dialog.classList.add("displayed");
-	});
-}
-
-function hide_all_dialogs() {
-	const dialogs = document.getElementsByClassName("dialog");
-	for (const dialog of dialogs) {
-		dialog.classList.remove("displayed");
-		setTimeout(() => {
-			dialog.remove()
-		}, 200);
-	}
-}
-
 function upload_file(input) {
 	const file = input.files[0];
 	const name = file.name;
@@ -844,7 +778,6 @@ function remove_message(message) {
 	setTimeout(() => container.remove(), 200);
 }
 
-
 /* ===================== Begin commands ===================== */
 
 function help(arg) {
@@ -869,18 +802,6 @@ function help(arg) {
 	display_command_message(text);
 }
 
-function img() {
-	// Need a random id because there can be multiple of these at the same time
-	const seed = Math.random() * 1337 * 9001 * 0xBEEF;
-	const html = `<div>Upload an image</div>
-	<label for="pic${seed}">
-		<img class="clickable" src="imgs/uploadfile.svg"/>
-	</label>
-	<input id="pic${seed}" type="file" onchange="upload_file(this)" accept="image/*">
-	<div class="button flat" onclick="remove_message(this.parentNode)">Cancel</div>`
-	display_command_message(html);
-}
-
 function dance(number) {
 	if (number == "") {
 		number = Math.floor(Math.random() * 8) + 1;
@@ -891,34 +812,6 @@ function dance(number) {
 	} else {
 		send_attachment(`dances/dance${number}.gif`);
 	}
-}
-
-function bg(number) {
-	const main = document.querySelector("main");
-	if (number == "") {
-		number = Math.floor(Math.random() * 8) + 1;
-		localStorage.setItem("bg", number);
-		main.style.backgroundImage = `url(backgrounds/bg${number}.jpg)`;
-		display_command_message(`Set background image to bg${number}.jpg`);
-	} else if (number == "0"
-		|| parseInt(number) === parseInt("") // Check for NaN
-		|| 0 > parseInt(number) || 8 < parseInt(number)) {
-		localStorage.setItem("bg", 0);
-		main.style.backgroundImage = "transparent";
-		display_command_message("Removed background image");
-	} else {
-		localStorage.setItem("bg", number);
-		main.style.backgroundImage = `url(backgrounds/bg${parseInt(number)}.jpg)`;
-		display_command_message(`Set background image to bg${parseInt(number)}.jpg`);
-	}
-}
-
-function goto(room) {
-	window.location = `/room.html?room=${room}&name=${user_name}`;
-}
-
-function name(new_name) {
-	window.location = `/room.html?room=${room_name}&name=${new_name}`;
 }
 
 function beer() {
@@ -933,11 +826,6 @@ function elit() {
 
 function say(text) {
 	send_message(text, false);
-}
-
-function kao(number) {
-	// TODO
-	send_message("▼・ᴥ・▼");
 }
 
 /* ===================== End of commands ===================== */

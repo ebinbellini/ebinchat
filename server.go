@@ -132,14 +132,14 @@ func openMySQLDatabase() {
 	}
 	sqlDB = db
 
+	fmt.Println("「echeveria」というなMySQLデータベースにコネクトしました")
+
 	createTable("users", `id INT AUTO_INCREMENT,
 		name VARCHAR(25) NOT NULL UNIQUE,
 		password VARCHAR(60) NOT NULL,
 		email VARCHAR(64) NOT NULL UNIQUE,
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
-
-	fmt.Println("「echeveria」というなMySQLデータベースにコネクトしました")
 }
 
 func createTable(name, fields string) {
