@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   sodipodi:docname="add-fren.svg"
+   inkscape:version="1.0 (4035a4fb49, 2020-05-01)"
+   id="svg8"
+   version="1.1"
+   viewBox="0 0 12.699999 12.7"
+   height="48"
+   width="48">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     inkscape:window-maximized="0"
+     inkscape:window-y="46"
+     inkscape:window-x="190"
+     inkscape:window-height="988"
+     inkscape:window-width="1624"
+     units="px"
+     showgrid="false"
+     inkscape:document-rotation="0"
+     inkscape:current-layer="layer1"
+     inkscape:document-units="mm"
+     inkscape:cy="16.604726"
+     inkscape:cx="17.027401"
+     inkscape:zoom="11.2"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     borderopacity="1.0"
+     bordercolor="#666666"
+     pagecolor="#ffffff"
+     id="base" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     id="layer1"
+     inkscape:groupmode="layer"
+     inkscape:label="Layer 1">
+    <ellipse
+       ry="2.3099384"
+       rx="2.3099387"
+       cy="3.5057294"
+       cx="5.1187129"
+       id="path837"
+       style="fill:none;stroke:#484848;stroke-width:0.8;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
+    <rect
+       y="5.58918"
+       x="8.4240007"
+       height="0.26568866"
+       width="3.373723"
+       id="rect841"
+       style="fill:none;stroke:#484848;stroke-width:0.528061;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+    <rect
+       transform="rotate(90)"
+       style="fill:none;stroke:#484848;stroke-width:0.528061;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect841-1"
+       width="3.373723"
+       height="0.26568866"
+       x="4.0772753"
+       y="-10.267331" />
+    <path
+       sodipodi:nodetypes="csc"
+       id="path860"
+       d="m 1.6536459,10.752631 c 0,0 0.067374,-3.1040701 3.6143972,-3.1110368 3.4745462,-0.00683 3.5199032,3.1307278 3.5199032,3.1307278"
+       style="fill:none;stroke:#484848;stroke-width:0.730368;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+  </g>
+</svg>
