@@ -24,6 +24,14 @@ function ripple_size(height, width) {
 
 function relative_click_coordinates(event, target) {
 	let rect = target.getBoundingClientRect();
+	const touches = event.changedTouches;
+	if (touches) {
+		return {
+			x: touches[0].pageX - rect.left,
+			y: touches[0].pageY - rect.top
+		};
+	}
+
 	return {
 		x: event.pageX - rect.left,
 		y: event.pageY - rect.top
@@ -51,12 +59,12 @@ function applyStylesToRipple(element, event, target) {
 
 function ripple_cleanup(ripple) {
 	ripple.setAttribute("removal-scheduled", "f");
-	window.setTimeout(function () {
+	window.setTimeout(() => {
 		ripple.style.transition = "1200ms cubic-bezier(0, 0, 0.2, 1)";
 		ripple.style.opacity = 0;
 		ripple.style.width = "32px";
 		ripple.style.height = "32px";
-		window.setTimeout(function () {
+		window.setTimeout(() => {
 			if (ripple)
 				ripple.remove();
 		}, 750);
@@ -74,21 +82,17 @@ function create_ripple(parent) {
 
 function ripple_event_handler(event) {
 	const target = event.currentTarget;
+	rippling_allowed = false;
 	requestAnimationFrame(() => {
-		if (rippling_allowed) {
-			rippling_allowed = false;
-			
-			if (!target.classList.contains("disabled")) {
-				const ripple_element = create_ripple(target);
-				applyStylesToRipple(ripple_element, event, target);
-			}
-			window.setTimeout(function () {
-				rippling_allowed = true;
-			}, 150);
+		if (!target.classList.contains("disabled")) {
+			const ripple_element = create_ripple(target);
+			applyStylesToRipple(ripple_element, event, target);
 		}
 	});
 }
 
+// Used to not avoid adding multiple listeners to the document element
+let ripple_initiated_once = false;
 function init_ripple() {
 	/* 	For some reason the ripples cause other event listeners
 	 *	to not fire on pale moon. I'm including Goanna and Gecko
@@ -99,47 +103,47 @@ function init_ripple() {
 		navigator.userAgent.includes("Goanna"))
 		return;
 
+
 	const ripple_containers = [].slice.call(
 		document.getElementsByClassName("ripple")
 	);
 
-	//Apply event listener to each of the rippleContainers
-	ripple_containers.forEach(function (element) {
-		if (!element.hasAttribute("ripple-status")) {
-			element.setAttribute("ripple-status", "activated");
-			element.addEventListener("mousedown", function (event) {
+	// Apply event listener to unactivated ripple containers 
+	ripple_containers.filter(element => !element.hasAttribute("ripple-status"))
+	.forEach(element => {
+		element.setAttribute("ripple-status", "activated");
+
+		element.addEventListener("mousedown", event => {
+			if (!('ontouchstart' in document.documentElement))
 				ripple_event_handler(event);
-			});
-			if (passive_supported) {
-				element.addEventListener("touchstart", function (event) {
-					ripple_event_handler(event);
-				}, { passive: true });
-			}
-			else {
-				element.addEventListener("touchstart", function (event) {
-					ripple_event_handler(event);
-				});
-			}
+		});
 
-			// Delete ripple if the mouse leaves the container
-			element.addEventListener("mouseleave", function (event) {
-				delete_all_ripples();
-			});
+		element.addEventListener("touchstart", event => {
+			if ('ontouchstart' in document.documentElement)
+				ripple_event_handler(event);
+		});
 
-			// Clean up ripples if mouseup or touchend occurs outside element
-			document.addEventListener("mouseup", function (event) {
-				delete_all_ripples();
-			});
-
-			document.addEventListener("touchend", function (event) {
-				delete_all_ripples();
-			});
-		}
+		// Delete ripple if the mouse leaves the container
+		element.addEventListener("mouseleave", event => {
+			delete_all_ripples();
+		});
 	});
+
+	if (!ripple_initiated_once) {
+		// Clean up ripples if mouseup or touchend occurs outside element
+		document.addEventListener("mouseup", event => {
+			delete_all_ripples();
+		});
+
+		document.addEventListener("touchend", event => {
+			delete_all_ripples();
+		});
+	}
+
+	ripple_initiated_once = true;
 }
 
-// To stop both events from firing
-let rippling_allowed = true;
+// Prevent event from firing multiple times simultaneously
 let deleting_ripples_allowed = true;
 
 function delete_all_ripples() {
@@ -154,5 +158,5 @@ function delete_all_ripples() {
 		window.setTimeout(() => {
 			deleting_ripples_allowed = true;
 		}, 50);
-    }
+	}
 }

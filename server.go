@@ -98,6 +98,11 @@ func main() {
 	http.HandleFunc("/signup", respondToSignUp)
 	http.HandleFunc("/login", respondToLogIn)
 	http.HandleFunc("/sendmessage/", respondToSendMessage)
+	http.HandleFunc("/searchuser/", respondToSearchUsers)
+	http.HandleFunc("/sendfriendrequest/", respondToSendFriendRequest)
+	http.HandleFunc("/validatejwt/", respondToValidateJWT)
+	http.HandleFunc("/profilepics/", respondToProfilePics)
+	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
 	http.HandleFunc("/messages/", respondToGetMessages)
 	http.HandleFunc("/subscribe/", respondToSubscribePush)
 	http.HandleFunc("/images/", respondToGetImage)
@@ -122,6 +127,7 @@ func generateHMACPrivateKey() {
 }
 
 func openMySQLDatabase() {
+	// benim:liksomvadeupposv@localhost:3306/echeveria
 	db, err := sql.Open("mysql", "benim:liksomvadeupposv@(127.0.0.1:3306)/echeveria?parseTime=true")
 	if err != nil {
 		log.Fatal(err)
@@ -138,8 +144,25 @@ func openMySQLDatabase() {
 		name VARCHAR(25) NOT NULL UNIQUE,
 		password VARCHAR(60) NOT NULL,
 		email VARCHAR(64) NOT NULL UNIQUE,
+		image TEXT,
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
+
+	createTable("friendlist", `id INT AUTO_INCREMENT,
+		name VARCHAR(25) NOT NULL UNIQUE,
+		password VARCHAR(60) NOT NULL,
+		email VARCHAR(64) NOT NULL UNIQUE,
+		image TEXT,
+		created_at DATETIME,
+		PRIMARY KEY (id)`)
+
+	// Enable searching for usernames
+	_, err = sqlDB.Exec(`ALTER TABLE users ADD FULLTEXT(name)`)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("ユーザー名前のインデックスを作った")
+	}
 }
 
 func createTable(name, fields string) {
@@ -195,9 +218,11 @@ func respondToGetVapidPublic(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, vapidPublic)
 }
 
-func createUserJWT(id int64) string {
+func createUserJWT(id int64, name, email string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":  strconv.FormatInt(id, 10),
+		"aud": email,
+		"sub": name,
 		"exp": time.Now().Add(authTokenLifetime).Unix(),
 	})
 
@@ -246,8 +271,8 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 
 	// Store user in database
 	// Errors if someone else is using the same email or name
-	query := `INSERT INTO users (email, password, name, created_at) VALUES (?, ?, ?, ?);`
-	result, err := sqlDB.Exec(query, signup.Email, signup.Password, signup.Name, time.Now())
+	query := `INSERT INTO users (email, password, name, image, created_at) VALUES (?, ?, ?, ?, ?);`
+	result, err := sqlDB.Exec(query, signup.Email, signup.Password, signup.Name, "default.svg", time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -257,13 +282,14 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 	// Get the unique ID of the newly created user
 	id, err := result.LastInsertId()
 	if err != nil {
+		fmt.Println("det blir fel")
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err)
 		return
 	}
 
 	// Create and send authentication token
-	token := createUserJWT(id)
+	token := createUserJWT(id, signup.Name, signup.Email)
 	// Expires after 31 days (one month)
 	cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
 	http.SetCookie(w, cookie)
@@ -283,17 +309,21 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO use QueryRows instead
 	rows, err := sqlDB.Query("SELECT id, password FROM users WHERE email=?", login.Email)
-	// TODO SEE WHAT HAPPENS WHEN YOU SEARCH FOR A USER THAT DOES NOT EXIST
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, "Could not find a user with that combination of email and password")
+		return
 	}
+
 	defer rows.Close()
 	rows.Next()
 	var id, password string
 	if err := rows.Scan(&id, &password); err != nil {
-		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, "Could not find a user with that combination of email and password")
+		return
 	}
 
 	// Check if password is correct
@@ -301,21 +331,171 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, "Could not find a user with that combination of email and password")
-	} else {
-		// Succesfully authenticated
-		idInt, err := strconv.Atoi(id)
+		return
+	}
+
+	// Succesfully authenticated
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+	}
+
+	// Create and send authentication token
+	token := createUserJWT(int64(idInt), login.Name, login.Email)
+	// Expires after 31 days (one month)
+	cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
+	http.SetCookie(w, cookie)
+	fmt.Fprintln(w, "Authenticated!")
+}
+
+func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
+	/*requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 4 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "uuh?")
+		return
+	}
+
+	tokenString := split[2]
+	name, err := url.QueryUnescape(split[3])*/
+
+}
+
+func respondToSearchUsers(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 4 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "uuh?")
+		return
+	}
+
+	tokenString := split[2]
+	query, err := url.QueryUnescape(split[3])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Println("failed to validate")
+		return
+	}
+
+	// I looked it up and it seems like this is safe
+	rows, err := sqlDB.Query(`SELECT name FROM users WHERE
+		MATCH(name) AGAINST(?) LIMIT 10`, query)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// TODO READ ALL ROWS ETC LOLE
+	defer rows.Close()
+	names := []string{}
+	for rows.Next() {
+		var name string
+		err := rows.Scan(&name)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusForbidden)
 			fmt.Fprint(w, err)
+			return
+		}
+		names = append(names, name)
+	}
+
+	res, err := json.Marshal(names)
+	if err == nil {
+		json.NewEncoder(w).Encode(res)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, err)
+	}
+}
+
+func respondToProfilePics(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Path
+	fp := strings.TrimPrefix(strings.ReplaceAll(filepath.Clean(url), "\\", "/"), "/")
+
+	fmt.Println(fp)
+
+	_, err := os.Stat(fp)
+	if err == nil {
+		// Serve picture
+		http.ServeFile(w, r, fp)
+	} else {
+		if os.IsNotExist(err) {
+			fmt.Println("HITTADES INTE")
+			fp = filepath.Join("profilepics", "default.png")
+			http.ServeFile(w, r, fp)
+		} else {
+			serveInternalError(w, r)
+		}
+	}
+}
+
+func respondToProfilePicURL(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "bad path")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Invalid")
+		return
+	}
+
+	var url string
+	sqlDB.QueryRow(`SELECT image FROM users WHERE id = ?`, (*claims)["id"]).Scan(&url)
+	fmt.Fprint(w, url)
+}
+
+func respondToValidateJWT(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "what")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Invalid")
+		return
+	}
+	fmt.Fprint(w, (*claims)["id"])
+	// TODO FIND USER IN SQL DATABASE
+}
+
+func validateJWTClaims(tokenString string) *jwt.MapClaims {
+	token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		_, ok := token.Method.(*jwt.SigningMethodHMAC)
+		if !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 
-		// Create and send authentication token
-		token := createUserJWT(int64(idInt))
-		// Expires after 31 days (one month)
-		cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
-		http.SetCookie(w, cookie)
-		fmt.Fprintln(w, "Authenticated!")
+		return hmacshaPrivate, nil
+	})
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		return &claims
 	}
+	return nil
 }
 
 func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {

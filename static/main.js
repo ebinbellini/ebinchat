@@ -1,16 +1,16 @@
-let room_name = undefined;
 let user_name = undefined;
+let jwt_token = undefined;
 let history = [];
 let history_index = 0;
 let last_message_time = 1337;
 
-const commands = [
+/*const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
 	{ name: "say", func: say, arg: "string", info: "Speak your mind.", extended: "Type /say /say to say /say." },
 	{ name: "dance", func: dance, arg: "number", info: "Use this to dance.", extended: "Type for example /dance 3 for dance number three or /dance for a radnom dance. There are 8 different dances." },
 	{ name: "beer", func: beer, arg: "none", info: "Use this to beer.", extended: "Beer! Very unhealthy." },
 	{ name: "1337", func: elit, arg: "none", info: "Eliiiiiiiit", extended: "Fett kool elit låda liksom." },
-];
+];*/
 
 window.onload = main;
 function main() {
@@ -66,7 +66,7 @@ function submit_signup_form(e) {
 					}
 				});
 			} else {
-				display_logged_in_ui();
+				check_logged_in();
 			}
 		});
 	}
@@ -90,7 +90,7 @@ function submit_login_form(e) {
 					display_snackbar(text);
 				});
 			} else {
-				display_logged_in_ui();
+				check_logged_in();
 			}
 		});
 	}
@@ -154,12 +154,25 @@ function check_logged_in() {
 	const login = () => setTimeout(display_form, 600);
 	const auth = find_cookie("auth")
 	if (auth) {
-		const token = JSON.parse(atob(auth.split('.')[1]))
-		if (is_auth_token_valid(token)) {
-			setTimeout(display_logged_in_ui, 600);
-		} else {
+		const token = JSON.parse(atob(auth.split('.')[1]));
+		// Check expiration before sending to server
+		if (is_jwt_token_expired(token)) {
 			login();
+			return;
 		}
+
+		// Send to server to check against private key
+		validate_jwt_token(auth, token.id).then(valid => {
+			if (valid) {
+				setTimeout(display_logged_in_ui, 800);
+				jwt_token = auth;
+			} else {
+				login();
+			}
+		}).catch(reason => {
+			// Invalid
+			login();
+		});
 	} else {
 		login();
 	}
@@ -169,6 +182,11 @@ function display_logged_in_ui() {
 	fade_out_title();
 	hide_login_form();
 	remove_background();
+	set_action_center_listeners();
+	set_remove_main_menu_listener();
+	set_scroll_listener();
+	show_profile_picture();
+
 	//load_account_screen_info();
 	setTimeout(show_main, 100);
 	setTimeout(() => {
@@ -176,7 +194,351 @@ function display_logged_in_ui() {
 	}, 250);
 }
 
+function set_scroll_listener() {
+	const main = document.getElementsByTagName("main")[0];
+	main.addEventListener("scroll", main_scroll);
+}
+
+function main_scroll(event) {
+	const main = document.getElementsByTagName("main")[0];
+	const header = main.getElementsByTagName("header")[0];
+	const header_content = header.children[0];
+	const content = document.getElementById("content");
+	const scroll = main.scrollTop;
+	if (scroll < 122) {
+		const radius = ((122 - scroll) / 122) * 16;
+		content.style.borderRadius = `${radius}px ${radius}px 0 0`;
+		header_content.style.transform = `scale(${(122 - scroll / 5) / 122})`;
+	} else {
+		header_content.style.transform = `scale(0.5)`;
+		content.style.borderRadius = `0`;
+	}
+}
+
+function set_remove_main_menu_listener() {
+	const main = document.getElementsByTagName("main")[0];
+	main.addEventListener("click", remove_main_menu);
+}
+
+function remove_main_menu(event) {
+	const menu = document.getElementsByClassName("menu")[0];
+
+	if (is_child_of(event.target, menu))
+		return;
+
+	if (menu && menu.children[0].classList.contains("displayed")) {
+		const child_count = menu.childElementCount;
+		for (const index of Array(child_count).keys()) {
+			setTimeout(() => {
+				menu.children[index].classList.remove("displayed");
+
+				// If this is the last one, remove entire menu
+				if (index == 0) {
+					menu.classList.remove("displayed");
+					setTimeout(() => {
+						menu.remove();
+					}, 400);
+				}
+			}, 30 * (child_count - index - 1));
+		}
+	}
+}
+
+function is_child_of(child, parent) {
+	return (child == parent ? true :
+		(child == document.body ? false :
+			is_child_of(child.parentNode, parent)));
+}
+
+function set_action_center_listeners() {
+	const center = document.getElementById("action-center");
+	for (const action of center.children) {
+		action.addEventListener("click", open_action)
+	}
+}
+
+function show_profile_picture() {
+	const pic = document.getElementsByClassName("my-profile-pic")[0];
+	pic.style.backgroundImage = "url(/profilepics/default.svg)";
+	get("profilepicurl").then(response => {
+		if (response.ok) {
+			response.text().then(url => {
+				pic.style.backgroundImage = "url(/profilepics/" + url + ")";
+			});
+		}
+	});
+
+	pic.addEventListener("click", open_main_menu);
+}
+
+function open_main_menu(event) {
+	const pic = event.currentTarget;
+	const copy = pic.cloneNode(true);
+	// TODO
+	copy.style.right = "8px";
+	copy.style.top = "8px";
+	const main = document.getElementsByTagName("main")[0];
+
+	const menu = document.createElement("div");
+	menu.classList.add("menu");
+
+	menu.innerHTML += `
+		<div class="menu-option">Help</div>
+		<div class="menu-option">Terms of Service</div>
+		<div class="menu-option">Privacy</div>
+		<div class="menu-option">Settings</div>
+		<div class="menu-option">Log out</div>`;
+	menu.appendChild(copy);
+	main.appendChild(menu);
+
+	requestAnimationFrame(() => {
+		menu.classList.add("displayed");
+		for (const index of Array(menu.children.length).keys()) {
+			const option = menu.children[index];
+			option.classList.add("ripple");
+			setTimeout(() => {
+				option.classList.add("displayed");
+			}, 50 + 60 * index)
+		}
+		requestAnimationFrame(init_ripple);
+	})
+}
+
+function open_action(event) {
+	const shade = fullscreen_shade();
+
+	// Create sheet
+	const sheet = document.createElement("div");
+	sheet.classList.add("bottom-sheet");
+
+	// Fill sheet with content
+	const search = copy_search_bar("Search users");
+	search.addEventListener("input", search_for_users(sheet));
+	sheet.innerHTML += `<div class="expansion-container" onclick="bottom_sheet_expansion_clicked(this)">
+		<div class="expansion-bar"></div>
+		<div class="expansion-bar"></div>
+	</div>`;
+	sheet.appendChild(search);
+	const results = document.createElement("div");
+	results.classList.add("search-results");
+	sheet.appendChild(results);
+
+	// Add expanding-functionality
+	sheet.addEventListener("mousedown", enable_sheet_movement(sheet));
+	sheet.addEventListener("touchstart", enable_sheet_movement(sheet));
+
+	// Display sheet
+	document.body.appendChild(sheet);
+	requestAnimationFrame(() => {
+		shade.addEventListener("click", () => {
+			remove_bottom_sheet(sheet);
+		});
+		requestAnimationFrame(() => {
+			obscure_main();
+			sheet.style.top = "50%";
+		});
+	});
+}
+
+function search_for_users(sheet) {
+	return event => {
+		get("searchuser", event.target.value).then(response => {
+			if (!response.ok)
+				return;
+
+			response.text().then(text => {
+				const matches = base64_json_to_object(text);
+				const results = sheet.getElementsByClassName("search-results")[0];
+				results.innerHTML = "";
+				for (const match of matches) {
+					const name = decodeURIComponent(escape(match));
+					results.innerHTML += name;
+				}
+			});
+		})
+	}
+}
+
+function bottom_sheet_expansion_clicked(exp) {
+	if (sheet_has_been_moved)
+		return;
+	if (exp.classList.contains("arrow")) {
+		move_sheet({ direction: "middle" }, true);
+	} else {
+		move_sheet({ direction: "up" }, true)
+	}
+}
+
+function obscure_main() {
+	const main = document.getElementsByTagName("main")[0];
+	main.style.transition = "300ms cubic-bezier(0.4, 0, 0.2, 1)";
+	requestAnimationFrame(() => main.classList.add("obscured"));
+}
+
+let sheet_has_been_moved = false;
+let sheet_movement_origin = 0;
+function enable_sheet_movement(sheet) {
+	return event => {
+		sheet_has_been_moved = false;
+		const touches = event.changedTouches;
+		const top = sheet.getBoundingClientRect().top;
+		sheet_movement_origin = top - (touches ? touches[0].pageY : event.pageY);
+
+		document.addEventListener("mousemove", move_sheet);
+		document.addEventListener("touchmove", move_sheet);
+
+		document.addEventListener("mouseup", disable_sheet_movement);
+		document.addEventListener("touchend", disable_sheet_movement);
+	};
+}
+
+function move_sheet(event, anim = false) {
+	const sheet = document.getElementsByClassName("bottom-sheet")[0];
+	const main = document.getElementsByTagName("main")[0];
+
+	// Do nothing if sheet is being removed (main is no longer obscured)
+	if (!main.classList.contains("obscured"))
+		return;
+
+	// Handle both mouse and touch events
+	let pageY = 0;
+	const direction = event.direction;
+	if (direction) {
+		if (direction === "up") {
+			pageY = 0;
+		} else if (direction === "middle") {
+			pageY = window.innerHeight / 2;
+		}
+	} else {
+		sheet_has_been_moved = true;
+		const touches = event.changedTouches;
+		pageY = (touches ? touches[0].pageY : event.pageY) + sheet_movement_origin;
+	}
+	const percentage = pageY / window.innerHeight;
+
+	// Return if outside screen
+	if (!(0 <= percentage && percentage <= 1))
+		return
+
+	// Remove transitions unless told not to
+	if (!anim) {
+		sheet.style.transition = (main.style.transition = "none");
+		apply_styles_move_sheet(sheet, main, percentage);
+	} else {
+		sheet.style.transition =
+			main.style.transition = "200ms cubic-bezier(0.4, 0, 0.2, 1)";
+		requestAnimationFrame(() => apply_styles_move_sheet(sheet, main, percentage));
+	}
+}
+
+function apply_styles_move_sheet(sheet, main, percentage) {
+	// Apply styles to sheet
+	sheet.style.top = (percentage * 100) + "%";
+	const sheetRadius = 32 * percentage;
+	sheet.style.borderRadius = `${sheetRadius}px`;
+
+	// Remove arrow formation from expansion bar if far down enough
+	// or add it far up enough
+	const exp = sheet.getElementsByClassName("expansion-container")[0];
+	if (percentage > 0.25) {
+		exp.classList.remove("arrow");
+	} else {
+		exp.classList.add("arrow");
+	}
+
+	// Apply styles to main
+	const size = 0.84 + 0.16 * percentage;
+	const mainRadius = 24 * (1 - percentage);
+	if (size < 1) {
+		main.style.transform = `scale(${size})`;
+		main.style.borderRadius = `${mainRadius}px`;
+	}
+}
+
+function disable_sheet_movement() {
+	remove_sheet_if_far_down();
+	fullscreen_sheet_if_high_up();
+	// TODO also touch
+	document.removeEventListener("mousemove", move_sheet);
+	document.removeEventListener("mouseup", disable_sheet_movement);
+}
+
+function remove_sheet_if_far_down() {
+	const sheet = document.getElementsByClassName("bottom-sheet")[0];
+	if (!sheet)
+		return;
+	const top = sheet.getBoundingClientRect().top;
+	if (top > window.innerHeight * 0.70) {
+		remove_bottom_sheet(sheet);
+	}
+}
+
+function fullscreen_sheet_if_high_up() {
+	const sheet = document.getElementsByClassName("bottom-sheet")[0];
+	if (!sheet)
+		return;
+
+	const top = sheet.getBoundingClientRect().top;
+	if (top < window.innerHeight * 0.3) {
+		make_bottom_sheet_fullscreen(sheet);
+	}
+}
+
+function make_bottom_sheet_fullscreen() {
+	move_sheet({ direction: "up" }, true);
+}
+
+function remove_bottom_sheet(sheet) {
+	sheet.style.transition = "200ms cubic-bezier(0.4, 0, 0.2, 1)";
+
+	const main = document.getElementsByTagName("main")[0];
+	main.classList.remove("obscured");
+	main.setAttribute("style", "display: block");
+
+	requestAnimationFrame(() => {
+		sheet.style.top = "100%";
+		remove_fullscreen_shade();
+		setTimeout(() => {
+			sheet.remove();
+		}, 200);
+	});
+}
+
+function copy_search_bar(purpose) {
+	// Copy
+	const search_bar = document.getElementById("contact-search");
+	const copy = search_bar.cloneNode(true);
+
+	// Set placeholder
+	const input = copy.getElementsByTagName("input")[0];
+	input.setAttribute("placeholder", purpose);
+
+	// Avoid duplicate id's
+	copy.setAttribute("id", "request-search");
+
+	return copy;
+}
+
+function fullscreen_shade() {
+	const shade = document.createElement("div");
+	shade.classList.add("shade");
+	const insert = document.body.appendChild(shade);
+	requestAnimationFrame(() => {
+		shade.classList.add("displayed");
+	});
+	return insert;
+}
+
+function remove_fullscreen_shade() {
+	const shade = document.getElementsByClassName("shade")[0];
+	shade.classList.remove("displayed");
+	setTimeout(() => {
+		shade.remove()
+	}, 300);
+}
+
 function show_main() {
+	document.body.style.backgroundImage = "none";
 	const main = document.getElementsByTagName("main")[0];
 	main.style.display = "block";
 	requestAnimationFrame(() => {
@@ -209,9 +571,22 @@ function remove_background() {
 	document.body.classList.add("remove-background")
 }
 
-function is_auth_token_valid(token) {
-	const expiration = token.exp * 1000;
-	return expiration > Date.now();
+function is_jwt_token_expired(parsed_token) {
+	const expiration = parsed_token.exp * 1000;
+	return expiration < Date.now();
+}
+
+function validate_jwt_token(unparsed_token, id) {
+	return new Promise((resolve, reject) =>
+		fetch("/validatejwt/" + unparsed_token).then(response => {
+			if (response.ok) {
+				response.text().then(text => {
+					resolve(text === id);
+				});
+			} else {
+				reject("Invalid");
+			}
+		}));
 }
 
 function scale_in_title() {
@@ -236,7 +611,7 @@ function display_other_form() {
 	document.getElementById("auth-form-container").classList.toggle("show-next");
 }
 
-// Displays a message at the bottom of the screen for 4 seconds
+// Displays a message at the bottom of the screen for 3 seconds
 function display_snackbar(message) {
 	let container = document.getElementById("snackbar-container");
 	if (!container)
@@ -253,7 +628,7 @@ function display_snackbar(message) {
 				setTimeout(() => {
 					snackbar.parentNode.removeChild(snackbar);
 				}, 225);
-			}, 4000);
+			}, 3000);
 		})
 	);
 }
@@ -273,9 +648,7 @@ function create_snackbar(message) {
 	return snackbar;
 }
 
-
-async function register_service_worker() {
-	console.log("Registrerar");
+/*async function register_service_worker() {
 	if ("serviceWorker" in navigator) {
 		navigator.serviceWorker.register("sw.js");
 
@@ -295,6 +668,7 @@ async function register_service_worker() {
 					},
 					body: JSON.stringify(json)
 				});
+
 			}).catch(e => {
 				// Subscribe
 				const options = {
@@ -396,48 +770,23 @@ function insert_message(message) {
 			messages.scrollTop = messages.scrollHeight;
 		});
 	}
-}
+}*/
 
 function get(path, data) {
-	let location = `${path}/${room_name}/${user_name}`;
+	let location = `${path}/${jwt_token}`;
 	if (data)
 		location += "/" + data;
 	return fetch(location);
 }
 
-function query_string_values() {
+function base64_json_to_object(string) {
+	return JSON.parse(atob(string.split("\"").join("")));
+}
+
+
+/*function query_string_values() {
 	return window.location.search.substring(1).split("&").map(mapping =>
 		mapping.split("=")[1]);
-}
-
-function zoom_in_title() {
-	// Startup animation
-	const title = document.getElementById("welcome");
-	title.innerText = `Welcome, ${decodeURIComponent(user_name)}`
-	requestAnimationFrame(() => title.classList.add("enter"));
-	setTimeout(() => {
-		requestAnimationFrame(() => {
-			const main = document.querySelector("main");
-			main.classList.add("zoom-in");
-			title.classList.add("zoom-out")
-		});
-		setTimeout(() => {
-			title.remove();
-		}, 400);
-	}, 600);
-}
-
-function arrow_controller() {
-	const input = document.getElementById("msg_input");
-	const arrow = document.getElementById("arrow");
-
-	input.value = trim_enters(input.value);
-
-	if (input.value == "") {
-		arrow.classList.remove("active");
-	} else {
-		arrow.classList.add("active");
-	}
 }
 
 function trim_enters(string) {
@@ -723,10 +1072,6 @@ function unsecure_string_hash(string) {
 	return hash;
 }
 
-function base64_to_json(string) {
-	return JSON.parse(atob(string.split("\"").join("")));
-}
-
 function find_command(name) {
 	for (const command of commands) {
 		if (command.name == name) {
@@ -770,17 +1115,11 @@ function upload_file(input) {
 			remove_message(input.parentNode);
 		}).catch(e => display_dialog(e));
 	});
-}
-
-function remove_message(message) {
-	const container = message.parentNode;
-	container.classList.add("remove");
-	setTimeout(() => container.remove(), 200);
-}
+}*/
 
 /* ===================== Begin commands ===================== */
 
-function help(arg) {
+/*function help(arg) {
 	let text = "";
 	if (arg.length > 0) {
 		command_name = arg;
@@ -826,6 +1165,6 @@ function elit() {
 
 function say(text) {
 	send_message(text, false);
-}
+}*/
 
 /* ===================== End of commands ===================== */
