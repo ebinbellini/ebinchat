@@ -3,6 +3,7 @@ let jwt_token = undefined;
 let history = [];
 let history_index = 0;
 let last_message_time = 1337;
+let cookies_ok = false;
 
 /*const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
@@ -18,8 +19,29 @@ function main() {
 	set_background_position();
 	click_form_input();
 	check_logged_in();
+	display_cookie_banner();
 	init_ripple();
 	//register_service_worker();
+}
+
+function display_cookie_banner() {
+	const banner = document.createElement("div");
+	banner.setAttribute("id", "cookie-banner");
+	banner.innerHTML = `This website has cookies!
+	<a href="/privacy#cookies"><div class="button-flat">Read More</div></a>
+	<div class="button" onclick="remove_cookie_banner(false)">Disable!</div>
+	<div class="button" onclick="remove_cookie_banner(true)">OK!</div>`;
+	document.body.append(banner);
+	requestAnimationFrame(() => banner.classList.add("displayed"));
+}
+
+function remove_cookie_banner(ok) {
+	const banner = document.getElementById("cookie-banner");
+	banner.classList.remove("displayed");
+	cookies_ok = ok;
+	setTimeout(() => {
+		banner.remove();
+	}, 200);
 }
 
 function set_background_position() {
@@ -287,7 +309,7 @@ function open_main_menu(event) {
 		<div class="menu-option">Terms of Service</div>
 		<div class="menu-option">Privacy</div>
 		<div class="menu-option">Settings</div>
-		<div class="menu-option">Log out</div>`;
+		<div class="menu-option" onclick="log_out()">Log out</div>`;
 	menu.appendChild(copy);
 	main.appendChild(menu);
 
@@ -330,9 +352,9 @@ function open_action(event) {
 	// Display sheet
 	document.body.appendChild(sheet);
 	requestAnimationFrame(() => {
-		shade.addEventListener("click", () => {
-			remove_bottom_sheet(sheet);
-		});
+		const main = document.getElementsByTagName("main")[0];
+		main.addEventListener("click", () => remove_bottom_sheet(sheet));
+		shade.addEventListener("click", () => remove_bottom_sheet(sheet));
 		requestAnimationFrame(() => {
 			obscure_main();
 			sheet.style.top = "50%";
@@ -352,11 +374,22 @@ function search_for_users(sheet) {
 				results.innerHTML = "";
 				for (const match of matches) {
 					const name = decodeURIComponent(escape(match));
-					results.innerHTML += name;
+					results.innerHTML += friend_request_button_html(name);
 				}
+				requestAnimationFrame(init_ripple);
 			});
 		})
 	}
+}
+
+function friend_request_button_html(name) {
+	return `<div class="contact-container">
+		<div class="contact ripple">
+			<img class="profile-picture" src="/imgs/jocke.jpg">
+			<div class="profile-name">${name}</div>
+			<div class="last-message">Click to send a friend request!</div>
+		</div>
+	</div>`;
 }
 
 function bottom_sheet_expansion_clicked(exp) {
@@ -648,6 +681,22 @@ function create_snackbar(message) {
 	return snackbar;
 }
 
+function get(path, data) {
+	let location = `${path}/${jwt_token}`;
+	if (data)
+		location += "/" + data;
+	return fetch(location);
+}
+
+function base64_json_to_object(string) {
+	return JSON.parse(atob(string.split("\"").join("")));
+}
+
+function log_out() {
+	document.cookie = "auth=0;expires=Thu, 01 Jan 1970 00:00:01 GMT"
+	location.reload();
+}
+
 /*async function register_service_worker() {
 	if ("serviceWorker" in navigator) {
 		navigator.serviceWorker.register("sw.js");
@@ -770,21 +819,9 @@ function insert_message(message) {
 			messages.scrollTop = messages.scrollHeight;
 		});
 	}
-}*/
-
-function get(path, data) {
-	let location = `${path}/${jwt_token}`;
-	if (data)
-		location += "/" + data;
-	return fetch(location);
 }
 
-function base64_json_to_object(string) {
-	return JSON.parse(atob(string.split("\"").join("")));
-}
-
-
-/*function query_string_values() {
+function query_string_values() {
 	return window.location.search.substring(1).split("&").map(mapping =>
 		mapping.split("=")[1]);
 }
