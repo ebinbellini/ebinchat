@@ -141,7 +141,7 @@
 
 		<section id="content">
 			<section id="action-center">
-				<div class="action ripple">
+				<div class="action ripple" id="request">
 					<svg class="action-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
 						version="1.1" viewBox="0 0 12.7 12.7" height="48" width="48">
 						<ellipse ry="2.3099384" rx="2.3099387" cy="3.5057294" cx="5.1187129" id="path837"
@@ -161,7 +161,7 @@
 					<!-- TODO REQUEST FRIEND FEATURE GET A RANDOM CHATTING COMPANION -->
 				</div>
 
-				<div class="action ripple">
+				<div class="action ripple" id="new-group">
 					<svg class="action-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
 						version="1.1" viewBox="0 0 12.7 12.7" height="48" width="48">
 						<ellipse
@@ -187,7 +187,7 @@
 					</div>
 				</div>
 
-				<div class="action ripple">
+				<div class="action ripple" id="invitations">
 					<svg class="action-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
 						version="1.1" viewBox="0 0 12.7 12.7" height="48" width="48">
 						<ellipse ry="1.4593457" rx="1.5068451" cy="4.121819" cx="-3.7183938" id="path837-8"
@@ -212,6 +212,9 @@
 			<div class="subtitle">
 				Contacts
 			</div>
+
+			<!-- TODO välja sortering -->
+
 			<div class="contact-container">
 				<div class="contact ripple">
 					<img class="profile-picture" src="/imgs/jocke.jpg">
@@ -229,59 +232,7 @@
 						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
 				</svg>
 			</div>
-			<div class="contact-container">
-				<div class="contact ripple">
-					<img class="profile-picture" src="/imgs/usekta.png">
-					<div class="profile-name">Benimharettlångtnamn</div>
-					<div class="last-message">Det är benim som har längst namn av allihop här</div>
-				</div>
-				<svg class="dots ripple" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
-					version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
-					<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175" id="path837"
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-					<ellipse
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-						id="path837-9" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
-					<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175" id="path837-9-4"
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-				</svg>
-			</div>
-			<div class="contact-container">
-				<div class="contact ripple">
-					<img class="profile-picture" src="/imgs/äpple smaskare.png">
-					<div class="profile-name">äpple ätare</div>
-					<div class="last-message">Jag äter ett äpple</div>
-				</div>
-				<svg class="dots ripple" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
-					version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
-					<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175" id="path837"
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-					<ellipse
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-						id="path837-9" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
-					<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175" id="path837-9-4"
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-				</svg>
-			</div>
-			<div class="contact-container">
-				<div class="contact ripple">
-					<img class="profile-picture" src="/imgs/päron smaskare.gif">
-					<div class="profile-name">Päron smaskare</div>
-					<div class="last-message">Yosho är ond och inte god.</div>
-				</div>
-				<svg class="dots ripple" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
-					version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
-					<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175" id="path837"
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-					<ellipse
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-						id="path837-9" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
-					<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175" id="path837-9-4"
-						style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-				</svg>
-			</div>
-			<!-- TODO välja sortering -->
-			</div>
+
 		</section>
 	</main>
 </body>

@@ -1,9 +1,14 @@
+"use strict";
+
 let user_name = undefined;
 let jwt_token = undefined;
+let cookies_ok = false;
+
+let friend_requests = [];
+
 let history = [];
 let history_index = 0;
 let last_message_time = 1337;
-let cookies_ok = false;
 
 /*const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
@@ -19,34 +24,82 @@ function main() {
 	set_background_position();
 	click_form_input();
 	check_logged_in();
-	display_cookie_banner();
+	check_cookies_allowed();
 	init_ripple();
 	//register_service_worker();
 }
 
+function check_cookies_allowed() {
+	const permission = are_cookies_allowed()
+	if (permission == undefined) {
+		display_cookie_banner();
+	} else {
+		cookies_ok = true;
+	}
+}
+
+function are_cookies_allowed() {
+	const res = find_cookie("cookies_allowed");
+	return res ? res : undefined;
+}
+
 function display_cookie_banner() {
+	are_cookies_allowed();
 	const banner = document.createElement("div");
 	banner.setAttribute("id", "cookie-banner");
 	banner.innerHTML = `This website has cookies!
+	<div style="margin-bottom: 8px"></div>
 	<a href="/privacy#cookies"><div class="button-flat">Read More</div></a>
-	<div class="button" onclick="remove_cookie_banner(false)">Disable!</div>
-	<div class="button" onclick="remove_cookie_banner(true)">OK!</div>`;
+	<div class="button" onclick="remove_cookie_banner()">OK</div>`;
 	document.body.append(banner);
 	requestAnimationFrame(() => banner.classList.add("displayed"));
 }
 
-function remove_cookie_banner(ok) {
+function remove_cookie_banner() {
 	const banner = document.getElementById("cookie-banner");
 	banner.classList.remove("displayed");
-	cookies_ok = ok;
+	cookies_ok = true;
 	setTimeout(() => {
 		banner.remove();
-	}, 200);
+		document.cookie = "cookies_allowed=yes";
+	}, 300);
 }
 
 function set_background_position() {
 	const y = Math.floor(Math.random() * 400) + 200;
 	document.body.style.backgroundPosition = `0 ${y}px`;
+}
+
+function create_small_dialog(content) {
+	const dialog = document.createElement("div");
+	dialog.classList.add("dialog");
+	return dialog;
+}
+
+function display_small_dialog(dialog) {
+	const shade = document.createElement("div");
+	shade.classList.add("dialog-shade");
+	shade.appendChild(dialog);
+
+	shade.addEventListener("click", event => {
+		const target = event.target;
+		if (target == shade) {
+			remove_small_dialog(dialog);
+		}
+	});
+
+	document.body.appendChild(shade);
+	requestAnimationFrame(() => {
+		shade.classList.add("displayed");
+	});
+}
+
+function remove_small_dialog(dialog) {
+	const shade = dialog.parentNode;
+	shade.classList.remove("displayed");
+	setTimeout(() => {
+		shade.remove();
+	}, 280);
 }
 
 function click_form_input() {
@@ -208,12 +261,79 @@ function display_logged_in_ui() {
 	set_remove_main_menu_listener();
 	set_scroll_listener();
 	show_profile_picture();
+	check_friend_requests();
+	populate_contacts_list();
 
 	//load_account_screen_info();
 	setTimeout(show_main, 100);
 	setTimeout(() => {
 		login.style.display = "none";
 	}, 250);
+}
+
+function populate_contacts_list() {
+	// TODO
+	const button = create_contact_button();
+}
+
+function create_contact_button(name, last_message) {
+	const contact = document.createElement("div");
+	contact.classList.add("contact-container");
+
+	contact.innerHTML = `<div class="contact ripple">
+			<img class="profile-picture" src="/imgs/jocke.jpg">
+			<div class="profile-name"></div>
+			<div class="last-message"></div>
+		</div>
+		<svg class="dots ripple" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
+			version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
+			<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175" id="path837"
+				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+			<ellipse
+				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+				id="path837-9" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
+			<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175" id="path837-9-4"
+				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+		</svg>`;
+
+	const profile_name = contact.getElementsByClassName("profile-name")[0];
+	profile_name.innerText = name;
+
+	const last_message_text = contact.getElementsByClassName("last-message")[0];
+	last_message_text.innerText = last_message;
+
+	return contact;
+}
+
+function check_friend_requests() {
+	get("fetchfriendrequests").then(resp => {
+		resp.text().then(text => {
+			if (resp.ok) {
+				const requests = base64_json_to_object(text);
+				friend_requests = requests;
+				if (requests.length > 0) {
+					display_red_dot_on_invitations();
+				}
+			} else {
+				display_snackbar(text);
+			}
+		});
+	});
+}
+
+function create_red_dot() {
+	const dot = document.createElement("div");
+	dot.classList.add("red-dot");
+	return dot;
+}
+
+function display_red_dot_on_invitations() {
+	const dot = create_red_dot();
+	dot.style.bottom = "6px";
+	dot.style.left = "6px";
+
+	const invitations = document.getElementById("invitations");
+	invitations.appendChild(dot);
 }
 
 function set_scroll_listener() {
@@ -238,8 +358,7 @@ function main_scroll(event) {
 }
 
 function set_remove_main_menu_listener() {
-	const main = document.getElementsByTagName("main")[0];
-	main.addEventListener("click", remove_main_menu);
+	document.body.addEventListener("click", remove_main_menu);
 }
 
 function remove_main_menu(event) {
@@ -272,13 +391,6 @@ function is_child_of(child, parent) {
 			is_child_of(child.parentNode, parent)));
 }
 
-function set_action_center_listeners() {
-	const center = document.getElementById("action-center");
-	for (const action of center.children) {
-		action.addEventListener("click", open_action)
-	}
-}
-
 function show_profile_picture() {
 	const pic = document.getElementsByClassName("my-profile-pic")[0];
 	pic.style.backgroundImage = "url(/profilepics/default.svg)";
@@ -296,21 +408,21 @@ function show_profile_picture() {
 function open_main_menu(event) {
 	const pic = event.currentTarget;
 	const copy = pic.cloneNode(true);
-	// TODO
-	copy.style.right = "8px";
-	copy.style.top = "8px";
-	const main = document.getElementsByTagName("main")[0];
+	copy.style.right = "16px";
+	copy.style.top = "16px";
+	copy.style.position = "fixed";
 
 	const menu = document.createElement("div");
 	menu.classList.add("menu");
-
 	menu.innerHTML += `
-		<div class="menu-option">Help</div>
-		<div class="menu-option">Terms of Service</div>
-		<div class="menu-option">Privacy</div>
+		<a href="/help" class="menu-option">Help</a>
+		<a href="/tos" class="menu-option">Terms of Service</a>
+		<a href="/privacy" class="menu-option">Privacy</a>
 		<div class="menu-option">Settings</div>
 		<div class="menu-option" onclick="log_out()">Log out</div>`;
 	menu.appendChild(copy);
+
+	const main = document.getElementsByTagName("main")[0];
 	main.appendChild(menu);
 
 	requestAnimationFrame(() => {
@@ -326,55 +438,148 @@ function open_main_menu(event) {
 	})
 }
 
-function open_action(event) {
-	const shade = fullscreen_shade();
+function set_action_center_listeners() {
+	const center = document.getElementById("action-center");
+	const actions = document.getElementsByClassName("action");
+	actions[0].addEventListener("click", open_request_friends);
+	// TODO NEW GROUP BUTTON FUNCTiONaLITY
+	actions[1].addEventListener("click", open_request_friends);
+	actions[2].addEventListener("click", open_invitations);
+	/*for (const action of center.children) {
+		action.addEventListener("click", open_action)
+	}*/
+}
 
-	// Create sheet
-	const sheet = document.createElement("div");
-	sheet.classList.add("bottom-sheet");
+function open_request_friends(event) {
+	const sheet = create_sheet();
 
 	// Fill sheet with content
 	const search = copy_search_bar("Search users");
 	search.addEventListener("input", search_for_users(sheet));
+	sheet.appendChild(search);
+
+	const results = document.createElement("div");
+	results.classList.add("search-results");
+
+	sheet.appendChild(results);
+}
+
+function open_invitations() {
+	const sheet = create_sheet();
+
+	if (friend_requests.length == 0) {
+		sheet.innerHTML += `<div class="center-content" style="margin-top: 24px; font-size: 24px;">
+			No invitations
+		</div>`;
+	} else {
+		for (const request of friend_requests) {
+			// Put all friend requests into the sheet
+			const button = create_friend_request_button(request, decodeURIComponent(escape(request.name)) + " wants to be your friend");
+			button.addEventListener("click", () => dialog_accept_friend_request(request));
+			sheet.appendChild(button);
+		}
+	}
+}
+
+function dialog_accept_friend_request(request) {
+	// Create a dialog
+	const dialog = create_small_dialog();
+	const name = decodeURIComponent(escape(request.name));
+	dialog.innerText = `Accept friend request from ${name}?`;
+
+	// Space before buttons
+	const margin = document.createElement("div");
+	margin.style.marginTop = "16px";
+	dialog.appendChild(margin);
+
+	// Create buttons
+	const accept_button = document.createElement("div");
+	accept_button.className = "button-flat";
+	accept_button.innerText = "Accept";
+	const cancel_button = accept_button.cloneNode();
+	cancel_button.innerText = "Cancel";
+
+	// Define button functionality
+	accept_button.addEventListener("click", () => {
+		accept_friend_request(request);
+		remove_small_dialog(dialog);
+	});
+	cancel_button.addEventListener("click", () => {
+		remove_small_dialog(dialog);
+	});
+
+	// Insert said buttons
+	dialog.appendChild(accept_button);
+	dialog.appendChild(cancel_button);
+
+	// Show the dialog
+	display_small_dialog(dialog);
+}
+
+function accept_friend_request(request) {
+	const name = decodeURIComponent(escape(request.name));
+	get("acceptfriendrequest", request.id).then(resp => {
+		if (resp.ok) {
+			display_snackbar(`Accepted friend request from ${name}`);
+		} else {
+			resp.text().then(text => {
+				display_snackbar(text);
+			});
+		}
+	});
+}
+
+function create_sheet() {
+	const shade = fullscreen_shade();
+	const sheet = document.createElement("div");
+	sheet.classList.add("bottom-sheet");
 	sheet.innerHTML += `<div class="expansion-container" onclick="bottom_sheet_expansion_clicked(this)">
 		<div class="expansion-bar"></div>
 		<div class="expansion-bar"></div>
 	</div>`;
-	sheet.appendChild(search);
-	const results = document.createElement("div");
-	results.classList.add("search-results");
-	sheet.appendChild(results);
 
-	// Add expanding-functionality
-	sheet.addEventListener("mousedown", enable_sheet_movement(sheet));
-	sheet.addEventListener("touchstart", enable_sheet_movement(sheet));
-
-	// Display sheet
 	document.body.appendChild(sheet);
+
 	requestAnimationFrame(() => {
+
+		// Add expanding-functionality
+		sheet.addEventListener("mousedown", enable_sheet_movement(sheet));
+		sheet.addEventListener("touchstart", enable_sheet_movement(sheet));
+
+		// Add dismissing functionality
 		const main = document.getElementsByTagName("main")[0];
 		main.addEventListener("click", () => remove_bottom_sheet(sheet));
 		shade.addEventListener("click", () => remove_bottom_sheet(sheet));
+
+		// Show the sheet
 		requestAnimationFrame(() => {
 			obscure_main();
 			sheet.style.top = "50%";
 		});
 	});
+
+	return sheet;
 }
 
 function search_for_users(sheet) {
 	return event => {
-		get("searchuser", event.target.value).then(response => {
+		const query = event.target.value;
+		if (query == "") {
+			return;
+		}
+		get("searchuser", query).then(response => {
 			if (!response.ok)
 				return;
 
 			response.text().then(text => {
 				const matches = base64_json_to_object(text);
 				const results = sheet.getElementsByClassName("search-results")[0];
-				results.innerHTML = "";
-				for (const match of matches) {
-					const name = decodeURIComponent(escape(match));
-					results.innerHTML += friend_request_button_html(name);
+				if (matches.length > 0)
+					results.innerHTML = "";
+				for (const user_info of matches) {
+					const button = create_friend_request_button(user_info, "Click to send a friend request!");
+					button.addEventListener("click", () => send_friend_request(user_info));
+					results.append(button);
 				}
 				requestAnimationFrame(init_ripple);
 			});
@@ -382,14 +587,35 @@ function search_for_users(sheet) {
 	}
 }
 
-function friend_request_button_html(name) {
-	return `<div class="contact-container">
-		<div class="contact ripple">
+// Used both to send and accept requests
+function create_friend_request_button(user_info, hint) {
+	const name = decodeURIComponent(escape(user_info.name));
+	const button = document.createElement("div");
+	button.classList.add("contact-container");
+	button.innerHTML = `<div class="contact ripple">
 			<img class="profile-picture" src="/imgs/jocke.jpg">
-			<div class="profile-name">${name}</div>
-			<div class="last-message">Click to send a friend request!</div>
-		</div>
-	</div>`;
+			<div class="profile-name"></div>
+			<div class="last-message"></div>
+		</div>`;
+	const hintbox = button.getElementsByClassName("last-message")[0];
+	hintbox.innerText = hint;
+	const nametag = button.getElementsByClassName("profile-name")[0];
+	nametag.innerText = name;
+	return button;
+}
+
+function send_friend_request(user_info) {
+	const id = user_info.id;
+	const name = decodeURIComponent(escape(user_info.name));
+	display_snackbar("Friend request sent to " + name);
+	get("sendfriendrequest", user_info.id).then(resp => {
+		if (!resp.ok) {
+			resp.text().then(text => {
+				console.log(text);
+				display_snackbar("Unable to send friend request, " + text);
+			})
+		}
+	})
 }
 
 function bottom_sheet_expansion_clicked(exp) {
@@ -553,6 +779,7 @@ function copy_search_bar(purpose) {
 }
 
 function fullscreen_shade() {
+	// Shade is hidden on mobile
 	const shade = document.createElement("div");
 	shade.classList.add("shade");
 	const insert = document.body.appendChild(shade);
@@ -564,6 +791,8 @@ function fullscreen_shade() {
 
 function remove_fullscreen_shade() {
 	const shade = document.getElementsByClassName("shade")[0];
+	if (!shade)
+		return
 	shade.classList.remove("displayed");
 	setTimeout(() => {
 		shade.remove()
@@ -675,9 +904,8 @@ function create_snackbar_container() {
 function create_snackbar(message) {
 	const snackbar = document.createElement("div");
 	snackbar.classList.add("snackbar");
-	snackbar.innerHTML = `<span class="snackbar-content">
-		${message}
-	</span>`;
+	snackbar.innerHTML = `<span class="snackbar-content"></span>`;
+	snackbar.children[0].innerText = message;
 	return snackbar;
 }
 
