@@ -28,10 +28,9 @@ type awaitMessageHandler struct {
 
 // Message A message sent by a user
 type Message struct {
-	SenderName     string
-	Text           string
-	AttachmentPath string
-	TimeStamp      time.Time
+	Text           string    `json:"text"`
+	AttachmentPath string    `json:"path"`
+	TimeStamp      time.Time `json:"timestamp"`
 }
 
 // Listener Client waiting for when new data is available
@@ -93,6 +92,12 @@ type GroupData struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// CreateGroupData The data required to create a group
+type CreateGroupData struct {
+	GroupName string  `json:"groupName"`
+	Members   []int64 `json:"members"`
+}
+
 const listenerLifetime = 60 * time.Second
 const messageLimit = 300
 const roomImageLimit = 10
@@ -123,6 +128,7 @@ func main() {
 	http.HandleFunc("/acceptfriendrequest/", respondToAcceptFriendRequest)
 	http.HandleFunc("/fetchcontactlist/", respondToFetchContactList)
 	http.HandleFunc("/fetchfriendlist/", respondToFetchFriendList)
+	http.HandleFunc("/creategroup/", respondToCreateGroup)
 	http.HandleFunc("/validatejwt/", respondToValidateJWT)
 	http.HandleFunc("/profilepics/", respondToProfilePics)
 	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
@@ -562,9 +568,13 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	if rows2.Next() {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "You're already friends!")
+
+		// Remove friend request if it exists
+		query = "DELETE FROM friend_requests WHERE (reciever=? AND sender=?) OR (sender=? AND reciever=?)"
+		sqlDB.Exec(query, (*claims)["id"], senderID, (*claims)["id"], senderID)
+
 		return
 	}
-
 	// It is now certain that such a request exists
 
 	// Create a friend relationship
@@ -576,8 +586,8 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove friend request
-	query = "DELETE FROM friend_requests WHERE (id=? AND sender=?) OR (sender=? AND id=?)"
+	// Remove friend request if it exists
+	query = "DELETE FROM friend_requests WHERE (reciever=? AND sender=?) OR (sender=? AND reciever=?)"
 	_, err = sqlDB.Exec(query, (*claims)["id"], senderID, (*claims)["id"], senderID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -764,7 +774,7 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if id1 == (*claims)["id"] {
+		if string(id1) == (*claims)["id"] {
 			friendIDs = append(friendIDs, id2)
 		} else {
 			friendIDs = append(friendIDs, id1)
@@ -795,6 +805,84 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO create a group
+func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "err...?")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
+	}
+
+	// Decode message
+	decoder := json.NewDecoder(r.Body)
+	groupData := CreateGroupData{}
+	err := decoder.Decode(&groupData)
+	if err != nil {
+		serveBadRequest(w, r)
+		fmt.Fprintln(w, "failed to decode message")
+		return
+	}
+
+	// Create a chat
+	query := "INSERT INTO chat_groups (group_name, image, is_direct, last_message, last_event_time, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+	result, err := sqlDB.Exec(query, groupData.GroupName, "default.svg", false, "New group, say hi!", time.Now(), time.Now())
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Get ID of newly created chat
+	chatGroupID, err := result.LastInsertId()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	fmt.Println(chatGroupID)
+
+	// Get ID of chat creator
+	myID, err := strconv.ParseInt((*claims)["id"].(string), 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Add creator to chat
+	err = addUserIDToGroup(myID, chatGroupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Add members to chat
+	for _, memberID := range groupData.Members {
+		// Add members to chat
+		err = addUserIDToGroup(memberID, chatGroupID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err)
+			return
+		}
+	}
+
+	// Respond with success
+	fmt.Fprint(w, "指指指みんなの指を食べちゃう")
+}
+
 func addUserIDToGroup(userID, chatID int64) error {
 	// Check if such a friend relationship already exists
 	query := "SELECT user_id FROM group_members WHERE user_id=? AND group_id=?"
@@ -804,6 +892,7 @@ func addUserIDToGroup(userID, chatID int64) error {
 	}
 	defer rows.Close()
 	if rows.Next() {
+		rows.Scan(&userID)
 		return errors.New("This user is already in this group")
 	}
 
@@ -942,8 +1031,9 @@ func respondToValidateJWT(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Invalid")
 		return
 	}
+
+	// Respond with success
 	fmt.Fprint(w, (*claims)["id"])
-	// TODO FIND USER IN SQL DATABASE
 }
 
 func validateJWTClaims(tokenString string) *jwt.MapClaims {
@@ -1129,6 +1219,7 @@ func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
+	// TODO REPLACE WITH NEW STUFF
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
 	if len(split) != 4 {
@@ -1199,44 +1290,46 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	var message Message
 	err := decoder.Decode(&message)
 	if err != nil {
-		serveBadRequest(w, r)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, "このデータはおかしいです普通ではないです")
 		return
 	}
 
 	// Set timestamp
 	message.TimeStamp = time.Now()
 
-	// Store message in room
-	requestURL := r.URL.Path
-	split := strings.Split(requestURL, "/")
-	if len(split) != 3 {
-		serveBadRequest(w, r)
+	if len(message.Text) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, "Message is empty")
 		return
 	}
 
-	roomName := split[2]
-	room := rooms[roomName]
-	sendMessage(message, room)
-
-	// Keep messages within limit
-	room.MessageCount++
-	if room.MessageCount > messageLimit {
-		// Remove oldest message
-		room.Messages = room.Messages[1:]
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, "Wrong number of parameters for request")
+		return
 	}
+
+	// TODO fix this
+
+	// TODO ADD A MESSAGE LIMIT
 
 	// Respond with success
 	fmt.Fprint(w, "アウストラロピテクス")
 }
 
 func sendMessage(message Message, room *Room) {
+	// TODO
 	room.Messages = append(room.Messages, message)
 	notifyRoomMembers(message, room)
 }
 
 func notifyRoomMembers(message Message, room *Room) {
-	fmt.Println(room.Name, "に新しいメッセージが", message.SenderName, "から来た")
-	fmt.Println(room.Name, "のルームには", len(room.Listeners), "つリスナーがあります")
+	// TODO
+	//fmt.Println(room.Name, "で新しいメッセージが", message.SenderName, "から届いた")
+	//fmt.Println(room.Name, "のルームには", len(room.Listeners), "つリスナーがあります")
 	handleListeners(room)
 	sendNotificationsInRoom(message, room)
 }
@@ -1269,16 +1362,16 @@ func handleListeners(room *Room) {
 func sendNotificationsInRoom(message Message, room *Room) {
 	for _, subscriber := range room.Subscribers {
 		// Don't send notification to the sender
-		if subscriber.Name == message.SenderName {
-			continue
-		}
+		//if subscriber.Name == message.SenderName {
+		//continue
+		//}
 
 		// Build notification payload
 		notifContents := &NotificationContents{
-			Sender: message.SenderName,
-			Text:   message.Text,
-			Name:   subscriber.Name,
-			Room:   room.Name,
+			//Sender: message.SenderName,
+			Text: message.Text,
+			Name: subscriber.Name,
+			Room: room.Name,
 		}
 		text, err := json.Marshal(notifContents)
 		if err != nil {

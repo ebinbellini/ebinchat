@@ -128,7 +128,6 @@ function submit_signup_form(e) {
 			body: JSON.stringify(values)
 		}).then(response => {
 			if (!response.ok) {
-				// TODO handle errors
 				response.text().then(text => {
 					if (text.startsWith("Error 1062")) {
 						if (text.endsWith('users.name')) {
@@ -160,7 +159,6 @@ function submit_login_form(e) {
 			body: JSON.stringify(values)
 		}).then(response => {
 			if (!response.ok) {
-				// TODO handle errors
 				response.text().then(text => {
 					display_snackbar(text);
 				});
@@ -254,26 +252,40 @@ function check_logged_in() {
 }
 
 function display_logged_in_ui() {
+	// Exit form view
 	fade_out_title();
 	hide_login_form();
 	remove_background();
+
+	// Add event listeners
 	set_action_center_listeners();
 	set_remove_main_menu_listener();
+	set_contact_search_bar_listener();
 	set_scroll_listener();
+
+	// Display logged in data
 	show_profile_picture();
 	check_friend_requests();
 	populate_contacts_list();
 
-	//load_account_screen_info();
 	setTimeout(show_main, 100);
 	setTimeout(() => {
 		login.style.display = "none";
 	}, 250);
 }
 
+function set_contact_search_bar_listener() {
+	// Add event listener to "x" button on input
+	const search_bar = document.getElementById("contact-search");
+	const input = search_bar.children[0];
+	const cancel_button = search_bar.getElementsByClassName("cancel")[0];
+	cancel_button.addEventListener("click", () => {
+		input.value = "";
+	});
+}
+
 function populate_contacts_list() {
 	get("/fetchcontactlist/").then(resp => {
-		console.log(resp);
 		resp.text().then(text => {
 			if (resp.ok) {
 				const contacts = base64_json_to_object(text)
@@ -288,7 +300,6 @@ function populate_contacts_list() {
 				});
 
 				for (const contact_data of contacts) {
-					console.log(contact_data);
 					const ぼたん = create_contact_button(contact_data);
 					insert_contact_button(ぼたん);
 				}
@@ -321,19 +332,104 @@ function create_contact_button(data) {
 		</svg>
 	</div>`;
 
+	// Define what to do when clicked
+	contact.addEventListener("click", open_conversation(data));
+
 	// Store metadata in element
 	contact.setAttribute("data-groupID", data.groupID);
 	contact.setAttribute("data-lastEventTime", data.lastEventTime);
 
-	// Insert information from server
+	// Insert other information from server
 	const profile_picture = contact.getElementsByClassName("profile-picture")[0];
 	profile_picture.src = "profilepics/" + data.imageURL;
+
 	const profile_name = contact.getElementsByClassName("profile-name")[0];
 	profile_name.innerText = data.groupName;
+
 	const last_message = contact.getElementsByClassName("last-message")[0];
 	last_message.innerText = data.lastMessage;
 
 	return contact;
+}
+
+function open_conversation(group_data) {
+	return event => {
+		console.log(group_data);
+		const window = create_big_window(group_data.groupName);
+
+		const message_input = create_a_search_bar("Enter a message", "pen");
+		message_input.id = "message-input";
+		window.appendChild(message_input);
+
+		const send_button = document.createElement("img");
+		send_button.src = "icons/airplane.svg";
+		send_button.id = "send-button";
+		send_button.addEventListener("click", send_message(message_input.children[0]));
+
+		window.appendChild(send_button);
+	};
+}
+
+function send_message(input) {
+	return event => {
+		const message = input.value;
+		console.log(message);
+		fetch("/sendmessage/" + jwt_token, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				text: message
+			})
+		}).then(resp => {
+			console.log(resp);
+			resp.text().then(text => {
+				console.log(text);
+			});
+		})
+	};
+}
+
+function create_big_window(title) {
+	// Create window
+	const big_window = document.createElement("div");
+	big_window.classList.add("big-window");
+
+	// Add close button to window
+	const close_button = document.createElement("div");
+	close_button.classList.add("close-button");
+	close_button.innerHTML = `<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 10 10" height="24" width="24">
+		<path style="fill:none;stroke:#212121;stroke-width:1.3678;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 0.48447042,0.4827066 9.5171087,9.5172934"/>
+		<path style="fill:none;stroke:#212121;stroke-width:1.3677;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 9.5156305,0.48273833 0.48436955,9.5173949" />
+	`;
+	close_button.addEventListener("click", close_all_big_windows);
+	big_window.appendChild(close_button);
+
+	// Add header
+	const header = document.createElement("header");
+	header.innerText = title;
+	big_window.appendChild(header);
+
+	// Insert window
+	document.body.appendChild(big_window);
+
+	// Animate insertion
+	requestAnimationFrame(() => {
+		big_window.classList.add("displayed");
+	});
+
+	return big_window;
+}
+
+function close_all_big_windows() {
+	const big_windows = document.getElementsByClassName("big-window");
+	for (const window of big_windows) {
+		window.classList.remove("displayed");
+		setTimeout(() => {
+			window.remove();
+		}, 200);
+	}
 }
 
 function insert_contact_button(ぼたん) {
@@ -348,7 +444,6 @@ function insert_contact_button(ぼたん) {
 
 		// Sort in order of descending date
 		const childDate = Date(child.getAttribute("data-lastEventTime"));
-		console.log(childDate);
 		if (date > childDate) {
 			container.insertBefore(child, ぼたん);
 			return;
@@ -502,7 +597,7 @@ function open_request_friends() {
 	const sheet = create_sheet();
 
 	// Fill sheet with content
-	const search = copy_search_bar("Search users");
+	const search = create_a_search_bar("Search users");
 	search.addEventListener("input", search_for_users(sheet));
 	sheet.appendChild(search);
 
@@ -513,7 +608,6 @@ function open_request_friends() {
 }
 
 async function open_create_group() {
-	// TODO NEW GROUP FUNCTiONaLITY
 	const sheet = create_sheet();
 
 	let friend_list = [];
@@ -523,7 +617,6 @@ async function open_create_group() {
 	if (resp.ok) {
 		const friends = base64_json_to_object(text);
 		friends.map(friend => {
-			console.log(friend.name);
 			friend.name = decodeURIComponent(friend.name);
 			return friend;
 		});
@@ -533,29 +626,83 @@ async function open_create_group() {
 		return;
 	}
 
-	// Fill sheet with content
-	const group_name = copy_search_bar("Group name");
-	requestAnimationFrame(() => {
-		const input = group_name.getElementsByTagName("input")[0];
-		input.style.paddingLeft = "8px";
-		// TODO replace ame-glass with a pen icon or something
-		const アメリア = group_name.getElementsByClassName("magnifying-glass")[0];
-		アメリア.remove();
-	});
+	// Add a submit button
+	const submit_button = document.createElement("div");
+	submit_button.classList.add("button-flat");
+	submit_button.innerText = "Create group"
+	submit_button.addEventListener("click", create_group(sheet));
+	sheet.appendChild(submit_button);
+
+	// Add an input for the group name
+	const group_name = create_a_search_bar("Group name", "pen");
+	group_name.style.margin = "16px 16px 0 16px";
 	sheet.appendChild(group_name);
 
-	const search = copy_search_bar("Search friends");
+	// Add a search bar to filter friends
+	const search = create_a_search_bar("Search friends");
+	search.style.marginTop = "4px";
 	search.addEventListener("input", search_for_friends_to_add_to_group(sheet));
 	sheet.appendChild(search);
 
+	// Add a container for all the contacts
 	const results = document.createElement("div");
 	results.classList.add("search-results");
+
+	const cancel_button = search.getElementsByClassName("cancel")[0];
+	cancel_button.addEventListener("click", () => {
+		for (const contact of results.children) {
+			contact.classList.remove("disabled");
+		}
+	});
+	search.appendChild(cancel_button);
+
 	for (const friend of friend_list) {
-		const button = create_friend_request_button(friend, "Tap to add to group");
-		results.appendChild(button);
+		// Create a button to add friend to group
+		const friend_button = create_friend_request_button(friend, "Tap to add to group");
+		friend_button.addEventListener("click", _ => {
+			friend_button.classList.toggle("selected");
+		});
+
+		// Add a checkmark to the button to show selection status
+		const checkmark = document.createElement("img");
+		checkmark.src = "icons/check.svg";
+		checkmark.classList.add("checkmark");
+		friend_button.children[0].appendChild(checkmark);
+
+		// Add button to sheet
+		results.appendChild(friend_button);
 	}
 
 	sheet.appendChild(results);
+}
+
+function create_group(sheet) {
+	return event => {
+		const group_name = sheet.getElementsByTagName("input")[0].value;
+		const contact_container = sheet.getElementsByClassName("search-results")[0];
+		const friends = Array.from(contact_container.children);
+		const ids = friends.map(friend => parseInt(friend.getAttribute("data-id")));
+
+		fetch("/creategroup/" + jwt_token, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				groupName: group_name,
+				members: ids
+			})
+		}).then(resp => {
+			if (resp.ok) {
+				display_snackbar("Created group ", group_name)
+				populate_contacts_list();
+			} else {
+				resp.text().then(text => {
+					display_snackbar(text);
+				});
+			}
+		});
+	};
 }
 
 function search_for_friends_to_add_to_group(sheet) {
@@ -633,6 +780,9 @@ function accept_friend_request(request) {
 		if (resp.ok) {
 			display_snackbar(`Accepted friend request from ${name}`);
 		} else {
+			if (resp.ok) {
+				populate_contacts_list();
+			}
 			resp.text().then(text => {
 				display_snackbar(text);
 			});
@@ -701,6 +851,8 @@ function search_for_users(sheet) {
 // Used both to send and accept requests
 function create_friend_request_button(user_info, hint) {
 	const name = decodeURIComponent(escape(user_info.name));
+
+	// Create the button
 	const button = document.createElement("div");
 	button.classList.add("contact-container");
 	button.innerHTML = `<div class="contact ripple">
@@ -708,10 +860,16 @@ function create_friend_request_button(user_info, hint) {
 			<div class="profile-name"></div>
 			<div class="last-message"></div>
 		</div>`;
+
+	// Insert data
+	button.setAttribute("data-id", user_info.id);
+
 	const hintbox = button.getElementsByClassName("last-message")[0];
 	hintbox.innerText = hint;
+
 	const nametag = button.getElementsByClassName("profile-name")[0];
 	nametag.innerText = name;
+
 	return button;
 }
 
@@ -724,7 +882,6 @@ function send_friend_request(user_info) {
 				display_snackbar("Unable to send friend request, " + text.toLowerCase());
 			})
 		} else {
-			// TODO UPDATE CONTACT LIST
 			display_snackbar("Friend request sent to " + name);
 		}
 	})
@@ -829,7 +986,6 @@ function apply_styles_move_sheet(sheet, main, percentage) {
 function disable_sheet_movement() {
 	remove_sheet_if_far_down();
 	fullscreen_sheet_if_high_up();
-	// TODO also touch
 	document.removeEventListener("mousemove", move_sheet);
 	document.removeEventListener("mouseup", disable_sheet_movement);
 }
@@ -875,19 +1031,43 @@ function remove_bottom_sheet(sheet) {
 	});
 }
 
-function copy_search_bar(purpose) {
-	// Copy
-	const search_bar = document.getElementById("contact-search");
-	const copy = search_bar.cloneNode(true);
+function create_a_search_bar(purpose, icon) {
+	// Create search bar element
+	const search_bar = document.createElement("div");
+	search_bar.classList.add("search-bar");
 
-	// Set placeholder
-	const input = copy.getElementsByTagName("input")[0];
-	input.setAttribute("placeholder", purpose);
+	// Add content to search bar
+	search_bar.innerHTML = `<input type="text" placeholder="${purpose}">
+		<svg class="magnifying-glass" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
+			<path d="M 4.2336235,2.2489583 A 1.9846654,1.9846656 0 0 1 2.249088,4.233624 1.9846654,1.9846656 0 0 1 0.26429273,2.2492181 1.9846654,1.9846656 0 0 1 2.2485684,0.26429276 1.9846654,1.9846656 0 0 1 4.2336234,2.2484387" sodipodi:arc-type="arc" sodipodi:open="true" sodipodi:end="6.2829235" sodipodi:start="0" sodipodi:ry="1.9846656" sodipodi:rx="1.9846654" sodipodi:cy="2.2489583" sodipodi:cx="2.2489581" sodipodi:type="arc" style="fill:none;fill-opacity:1;stroke:#484848;stroke-width:0.528585;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"></path>
+			<path d="M 3.6155998,3.6149312 6.1739834,6.1878656 Z" style="fill:none;stroke:#484848;stroke-width:0.496894;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"></path>
+		</svg>
+		<div class="cancel">
+			<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 10 10" height="18" width="18">
+				<path d="M 0.5,0.5 9.5,9.5" style="fill:none;stroke:#5a9271;stroke-width:1.4;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"></path>
+				<path style="fill:none;stroke:#5a9271;stroke-width:1.4;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 9.5,0.5 0.5,9.5"></path>
+			</svg>
+		</div>`;
 
-	// Avoid duplicate id's
-	copy.setAttribute("id", "request-search");
+	// Add event listener to "x" button on input
+	const input = search_bar.firstChild;
+	const cancel_button = search_bar.getElementsByClassName("cancel")[0];
+	cancel_button.addEventListener("click", () => {
+		input.value = "";
+	});
 
-	return copy;
+	if (icon == "pen") {
+		// Create a pen icon
+		const pen = document.createElement("img");
+		pen.classList.add("magnifying-glass");
+		pen.src = "icons/pen.svg";
+
+		// Replace magnifying glass with the pen icon
+		const アメリア = search_bar.getElementsByClassName("magnifying-glass")[0];
+		アメリア.replaceWith(pen);
+	}
+
+	return search_bar;
 }
 
 function fullscreen_shade() {
@@ -951,7 +1131,9 @@ function is_jwt_token_expired(parsed_token) {
 }
 
 function validate_jwt_token(unparsed_token, id) {
-	return new Promise((resolve, reject) =>
+	return new Promise((resolve, reject) => {
+		// Have to fetch because get() uses a JWT token
+		// that is not yet validated here
 		fetch("/validatejwt/" + unparsed_token).then(response => {
 			if (response.ok) {
 				response.text().then(text => {
@@ -960,7 +1142,8 @@ function validate_jwt_token(unparsed_token, id) {
 			} else {
 				reject("Invalid");
 			}
-		}));
+		});
+	});
 }
 
 function scale_in_title() {
