@@ -272,16 +272,40 @@ function display_logged_in_ui() {
 }
 
 function populate_contacts_list() {
-	// TODO
-	const button = create_contact_button();
+	get("/fetchcontactlist/").then(resp => {
+		console.log(resp);
+		resp.text().then(text => {
+			if (resp.ok) {
+				const contacts = base64_json_to_object(text)
+				contacts.map(contact => {
+					for (const field of ["groupName", "lastMessage"]) {
+						contact[field] = decodeURIComponent(escape(contact[field]));
+					}
+					for (const field of ["lastEventTime", "createdAt"]) {
+						contact[field] = Date(contact[field]);
+					}
+					return contact;
+				});
+
+				for (const contact_data of contacts) {
+					console.log(contact_data);
+					const ぼたん = create_contact_button(contact_data);
+					insert_contact_button(ぼたん);
+				}
+				requestAnimationFrame(init_ripple);
+			} else {
+				display_snackbar(text);
+			}
+		})
+	});
 }
 
-function create_contact_button(name, last_message) {
+function create_contact_button(data) {
 	const contact = document.createElement("div");
 	contact.classList.add("contact-container");
 
 	contact.innerHTML = `<div class="contact ripple">
-			<img class="profile-picture" src="/imgs/jocke.jpg">
+			<img class="profile-picture" src="profilepics/default.svg">
 			<div class="profile-name"></div>
 			<div class="last-message"></div>
 		</div>
@@ -294,15 +318,43 @@ function create_contact_button(name, last_message) {
 				id="path837-9" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
 			<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175" id="path837-9-4"
 				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-		</svg>`;
+		</svg>
+	</div>`;
 
+	// Store metadata in element
+	contact.setAttribute("data-groupID", data.groupID);
+	contact.setAttribute("data-lastEventTime", data.lastEventTime);
+
+	// Insert information from server
+	const profile_picture = contact.getElementsByClassName("profile-picture")[0];
+	profile_picture.src = "profilepics/" + data.imageURL;
 	const profile_name = contact.getElementsByClassName("profile-name")[0];
-	profile_name.innerText = name;
-
-	const last_message_text = contact.getElementsByClassName("last-message")[0];
-	last_message_text.innerText = last_message;
+	profile_name.innerText = data.groupName;
+	const last_message = contact.getElementsByClassName("last-message")[0];
+	last_message.innerText = data.lastMessage;
 
 	return contact;
+}
+
+function insert_contact_button(ぼたん) {
+	const date = Date(ぼたん.getAttribute("data-lastEventTime"));
+
+	const container = document.getElementById("contacts");
+	for (const child of container.children) {
+		// Duplicate found, don't insert
+		if (ぼたん.getAttribute("data-groupID") == child.getAttribute("data-groupID")) {
+			return;
+		}
+
+		// Sort in order of descending date
+		const childDate = Date(child.getAttribute("data-lastEventTime"));
+		console.log(childDate);
+		if (date > childDate) {
+			container.insertBefore(child, ぼたん);
+			return;
+		}
+	}
+	container.appendChild(ぼたん);
 }
 
 function check_friend_requests() {
@@ -442,15 +494,11 @@ function set_action_center_listeners() {
 	const center = document.getElementById("action-center");
 	const actions = document.getElementsByClassName("action");
 	actions[0].addEventListener("click", open_request_friends);
-	// TODO NEW GROUP BUTTON FUNCTiONaLITY
-	actions[1].addEventListener("click", open_request_friends);
+	actions[1].addEventListener("click", open_create_group);
 	actions[2].addEventListener("click", open_invitations);
-	/*for (const action of center.children) {
-		action.addEventListener("click", open_action)
-	}*/
 }
 
-function open_request_friends(event) {
+function open_request_friends() {
 	const sheet = create_sheet();
 
 	// Fill sheet with content
@@ -462,6 +510,69 @@ function open_request_friends(event) {
 	results.classList.add("search-results");
 
 	sheet.appendChild(results);
+}
+
+async function open_create_group() {
+	// TODO NEW GROUP FUNCTiONaLITY
+	const sheet = create_sheet();
+
+	let friend_list = [];
+	const resp = await get("/fetchfriendlist/");
+	const text = await resp.text();
+
+	if (resp.ok) {
+		const friends = base64_json_to_object(text);
+		friends.map(friend => {
+			console.log(friend.name);
+			friend.name = decodeURIComponent(friend.name);
+			return friend;
+		});
+		friend_list = friends;
+	} else {
+		display_snackbar(text);
+		return;
+	}
+
+	// Fill sheet with content
+	const group_name = copy_search_bar("Group name");
+	requestAnimationFrame(() => {
+		const input = group_name.getElementsByTagName("input")[0];
+		input.style.paddingLeft = "8px";
+		// TODO replace ame-glass with a pen icon or something
+		const アメリア = group_name.getElementsByClassName("magnifying-glass")[0];
+		アメリア.remove();
+	});
+	sheet.appendChild(group_name);
+
+	const search = copy_search_bar("Search friends");
+	search.addEventListener("input", search_for_friends_to_add_to_group(sheet));
+	sheet.appendChild(search);
+
+	const results = document.createElement("div");
+	results.classList.add("search-results");
+	for (const friend of friend_list) {
+		const button = create_friend_request_button(friend, "Tap to add to group");
+		results.appendChild(button);
+	}
+
+	sheet.appendChild(results);
+}
+
+function search_for_friends_to_add_to_group(sheet) {
+	return event => {
+		const result_container = sheet.getElementsByClassName("search-results")[0];
+		const input = event.target;
+		requestAnimationFrame(() => {
+			const query = input.value.toLowerCase();
+			for (const friend of result_container.children) {
+				if (friend.innerHTML.toLowerCase().includes(query)) {
+					friend.classList.remove("disabled");
+				} else {
+					friend.classList.add("disabled");
+				}
+			}
+		});
+	}
 }
 
 function open_invitations() {
@@ -607,13 +718,14 @@ function create_friend_request_button(user_info, hint) {
 function send_friend_request(user_info) {
 	const id = user_info.id;
 	const name = decodeURIComponent(escape(user_info.name));
-	display_snackbar("Friend request sent to " + name);
 	get("sendfriendrequest", user_info.id).then(resp => {
 		if (!resp.ok) {
 			resp.text().then(text => {
-				console.log(text);
-				display_snackbar("Unable to send friend request, " + text);
+				display_snackbar("Unable to send friend request, " + text.toLowerCase());
 			})
+		} else {
+			// TODO UPDATE CONTACT LIST
+			display_snackbar("Friend request sent to " + name);
 		}
 	})
 }

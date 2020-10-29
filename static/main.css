@@ -512,6 +512,13 @@ header .search-bar input {
     background: rgba(0, 0, 0, 0.06);
 }
 
+.contact-container.disabled {
+    transform: scale(0.9);
+    margin: 0;
+    opacity: 0;
+    height: 0;
+}
+
 .contact {
     width: 100%;
     box-sizing: border-box;

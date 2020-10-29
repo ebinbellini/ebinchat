@@ -82,6 +82,17 @@ type SignupFields struct {
 	Name     string `json:"name"`
 }
 
+// GroupData The group data sent to the user
+type GroupData struct {
+	GroupID       string    `json:"groupID"`
+	GroupName     string    `json:"groupName"`
+	ImageURL      string    `json:"imageURL"`
+	IsDirect      bool      `json:"isDirect"`
+	LastMessage   string    `json:"lastMessage"`
+	LastEventTime time.Time `json:"lastEventTime"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
 const listenerLifetime = 60 * time.Second
 const messageLimit = 300
 const roomImageLimit = 10
@@ -110,6 +121,8 @@ func main() {
 	http.HandleFunc("/sendfriendrequest/", respondToSendFriendRequest)
 	http.HandleFunc("/fetchfriendrequests/", respondToFetchFriendRequests)
 	http.HandleFunc("/acceptfriendrequest/", respondToAcceptFriendRequest)
+	http.HandleFunc("/fetchcontactlist/", respondToFetchContactList)
+	http.HandleFunc("/fetchfriendlist/", respondToFetchFriendList)
 	http.HandleFunc("/validatejwt/", respondToValidateJWT)
 	http.HandleFunc("/profilepics/", respondToProfilePics)
 	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
@@ -170,9 +183,11 @@ func openMySQLDatabase() {
 		PRIMARY KEY (id)`)
 
 	createTable("chat_groups", `id INT AUTO_INCREMENT,
-		group_name VARCHAR(60) NOT NULL,
+		group_name VARCHAR(60),
+		image TEXT,
+		is_direct BOOLEAN,
 		last_message VARCHAR(60) NOT NULL,
-		is_direct INT,
+		last_event_time DATETIME,
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
 
@@ -377,7 +392,6 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
-	// TODO CHECK IF FRIEND REQUEST ALREADY EXISTS
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
 	if len(split) != 4 {
@@ -394,14 +408,45 @@ func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := url.QueryUnescape(split[3])
+	recieverID, err := url.QueryUnescape(split[3])
 	if err != nil {
 		fmt.Fprintln(w, err)
 		return
 	}
 
-	query := "INSERT INTO friend_requests (sender, reciever, created_at) VALUES (?, ?, ?)"
-	sqlDB.Exec(query, (*claims)["id"], id, time.Now())
+	// Check if already friends
+	query := "SELECT id1 FROM friends WHERE (id1=? AND id2=?) OR (id2=? AND id1=?)"
+	rows1, err := sqlDB.Query(query, (*claims)["id"], recieverID, (*claims)["id"], recieverID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer rows1.Close()
+	if rows1.Next() {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're already friends!")
+		return
+	}
+
+	// Check if such a friend request already exists
+	query = "SELECT id FROM friend_requests WHERE (sender=? AND reciever=?)"
+	rows2, err := sqlDB.Query(query, (*claims)["id"], recieverID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer rows2.Close()
+	if rows2.Next() {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You have already sent a friend request to this user!")
+		return
+	}
+
+	// Send friend request
+	query = "INSERT INTO friend_requests (sender, reciever, created_at) VALUES (?, ?, ?)"
+	sqlDB.Exec(query, (*claims)["id"], recieverID, time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -496,6 +541,7 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
+		return
 	}
 	defer rows1.Close()
 	if !rows1.Next() {
@@ -531,8 +577,8 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove friend request
-	query = "DELETE FROM friend_requests WHERE id=? AND sender=?"
-	_, err = sqlDB.Exec(query, (*claims)["id"], senderID)
+	query = "DELETE FROM friend_requests WHERE (id=? AND sender=?) OR (sender=? AND id=?)"
+	_, err = sqlDB.Exec(query, (*claims)["id"], senderID, (*claims)["id"], senderID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -540,8 +586,8 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a chat
-	query = "INSERT INTO chat_groups (direct, last_message, created_at) VALUES (?, ?, ?)"
-	result, err := sqlDB.Exec(query, true, "New friend!", time.Now())
+	query = "INSERT INTO chat_groups (image, is_direct, last_message, last_event_time, created_at) VALUES (?, ?, ?, ?, ?)"
+	result, err := sqlDB.Exec(query, "default.svg", true, "New friend!", time.Now(), time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -569,8 +615,184 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addUserIDToGroup(myID, chatGroupID)
-	addUserIDToGroup(senderIDInt, chatGroupID)
+	err = addUserIDToGroup(myID, chatGroupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+	err = addUserIDToGroup(senderIDInt, chatGroupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+}
+
+func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "err...?")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Println("failed to validate")
+		return
+	}
+
+	// Fetch the IDs of all groups the user is a member of
+	query := "SELECT group_id FROM group_members WHERE user_id=?"
+	rows, err := sqlDB.Query(query, (*claims)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer rows.Close()
+
+	// Store all group IDs in an array
+	groupIDs := []int{}
+	for rows.Next() {
+		var groupID int
+		err = rows.Scan(&groupID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err)
+			return
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	// Fetch display-data of all these groups
+	groupDatas := []GroupData{}
+	for _, groupID := range groupIDs {
+		row := sqlDB.QueryRow(`SELECT id, group_name, image, is_direct,
+			last_message, last_event_time, created_at
+			FROM chat_groups WHERE id=?`, groupID)
+		gd := GroupData{}
+		var groupName sql.NullString
+		err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
+			&gd.LastMessage, &gd.CreatedAt, &gd.LastEventTime)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, err)
+			return
+		}
+		if groupName.Valid {
+			gd.GroupName = groupName.String
+		}
+
+		// If the group is direct, fetch the user data instead
+		if gd.IsDirect {
+			row1 := sqlDB.QueryRow(`SELECT user_id FROM group_members
+				WHERE group_id=? AND user_id<>?`, groupID, (*claims)["id"])
+			var id int
+			err := row1.Scan(&id)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintln(w, err)
+				return
+			}
+
+			var name string
+			var image string
+
+			row2 := sqlDB.QueryRow("SELECT name, image FROM users WHERE id=?", id)
+			err = row2.Scan(&name, &image)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintln(w, err)
+				return
+			}
+			gd.GroupName = name
+			gd.ImageURL = image
+		}
+		groupDatas = append(groupDatas, gd)
+	}
+
+	res, err := json.Marshal(groupDatas)
+	if err == nil {
+		json.NewEncoder(w).Encode(res)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, err)
+	}
+}
+
+func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "err...?")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Println("failed to validate")
+		return
+	}
+
+	// Fetch the IDs of all friends of the user
+	query := "SELECT id1, id2 FROM friends WHERE id1=? OR id2=?"
+	rows, err := sqlDB.Query(query, (*claims)["id"], (*claims)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer rows.Close()
+
+	// Store all friends IDs in an array
+	friendIDs := []int{}
+	for rows.Next() {
+		var id1 int
+		var id2 int
+		err = rows.Scan(&id1, &id2)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err)
+			return
+		}
+
+		if id1 == (*claims)["id"] {
+			friendIDs = append(friendIDs, id2)
+		} else {
+			friendIDs = append(friendIDs, id1)
+		}
+	}
+
+	// Fetch display-data of all these users
+	profiles := []PublicUserInfo{}
+	for _, id := range friendIDs {
+		row := sqlDB.QueryRow(`SELECT name, image FROM users WHERE id=?`, id)
+		pui := PublicUserInfo{}
+		err := row.Scan(&pui.Name, &pui.Image)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, err)
+			return
+		}
+
+		profiles = append(profiles, pui)
+	}
+
+	res, err := json.Marshal(profiles)
+	if err == nil {
+		json.NewEncoder(w).Encode(res)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, err)
+	}
 }
 
 func addUserIDToGroup(userID, chatID int64) error {
@@ -585,9 +807,9 @@ func addUserIDToGroup(userID, chatID int64) error {
 		return errors.New("This user is already in this group")
 	}
 
-	// Insert users into the newly created chat
-	query = "INSERT INTO group_members (direct, last_message, created_at) VALUES (?, ?, ?)"
-	_, err = sqlDB.Exec(query, true, "New friend!", time.Now())
+	// Insert users
+	query = "INSERT INTO group_members (group_id, user_id, created_at) VALUES (?, ?, ?)"
+	_, err = sqlDB.Exec(query, chatID, userID, time.Now())
 	if err != nil {
 		return err
 	}
@@ -694,7 +916,13 @@ func respondToProfilePicURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var url string
-	sqlDB.QueryRow(`SELECT image FROM users WHERE id = ?`, (*claims)["id"]).Scan(&url)
+	row := sqlDB.QueryRow(`SELECT image FROM users WHERE id=?`, (*claims)["id"])
+	err := row.Scan(&url)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
 	fmt.Fprint(w, url)
 }
 
