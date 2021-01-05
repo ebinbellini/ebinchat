@@ -11,7 +11,6 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -28,6 +27,9 @@ type awaitMessageHandler struct {
 
 // Message A message sent by a user
 type Message struct {
+	ID             string    `json:"ID"`
+	SenderID       string    `json:"senderID"`
+	GroupID        string    `json:"groupID"`
 	Text           string    `json:"text"`
 	AttachmentPath string    `json:"path"`
 	TimeStamp      time.Time `json:"timestamp"`
@@ -35,22 +37,18 @@ type Message struct {
 
 // Listener Client waiting for when new data is available
 type Listener struct {
-	Writer  http.ResponseWriter
-	Request *http.Request
-	Name    string
-	Used    bool
-	Sent    time.Time
-	Expires time.Time
+	Writer      http.ResponseWriter
+	Request     *http.Request
+	Name        string
+	UserID      int64
+	Used        bool
+	LastMsgTime time.Time
+	Expires     time.Time
 }
 
-// Room A room that clients connect to
-type Room struct {
-	Name         string
-	Messages     []Message
-	Listeners    []*Listener
-	Subscribers  []Subscriber
-	ImageCount   int
-	MessageCount int
+// ListenerGroup All listeners in one group
+type ListenerGroup struct {
+	Listeners []*Listener
 }
 
 // Subscriber A web push subscription with name of subscriber
@@ -106,7 +104,7 @@ const bcryptCost = 12
 const authTokenLifetime = 24 * 31 * time.Hour
 
 // Global variables
-var rooms map[string]*Room = map[string]*Room{}
+var listenergroups map[string]*ListenerGroup = map[string]*ListenerGroup{}
 var vapidPublic string
 var vapidPrivate string
 var hmacshaPrivate []byte
@@ -132,12 +130,12 @@ func main() {
 	http.HandleFunc("/validatejwt/", respondToValidateJWT)
 	http.HandleFunc("/profilepics/", respondToProfilePics)
 	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
-	http.HandleFunc("/messages/", respondToGetMessages)
-	http.HandleFunc("/subscribe/", respondToSubscribePush)
 	http.HandleFunc("/images/", respondToGetImage)
 	http.HandleFunc("/vapid/", respondToGetVapidPublic)
-	http.HandleFunc("/uploadfile/", respondToUploadFile)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
+	http.HandleFunc("/messages/", respondToGetMessages)
+	//http.HandleFunc("/uploadfile/", respondToUploadFile)
+	//http.HandleFunc("/subscribe/", respondToSubscribePush)
 
 	fmt.Println("1337のポートを待機しています...")
 	err := http.ListenAndServe(":1337", nil)
@@ -188,6 +186,7 @@ func openMySQLDatabase() {
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
 
+	// TODO MESSAGECOUNT
 	createTable("chat_groups", `id INT AUTO_INCREMENT,
 		group_name VARCHAR(60),
 		image TEXT,
@@ -200,6 +199,14 @@ func openMySQLDatabase() {
 	createTable("group_members", `group_id INT,
 		user_id INT,
 		created_at DATETIME`)
+
+	createTable("messages", `id INT AUTO_INCREMENT,
+		sender_id INT,
+		group_id INT,
+		text VARCHAR(1024),
+		attachment_path VARCHAR(64),
+		timestamp DATETIME,
+		PRIMARY KEY (id)`)
 
 	// Enable searching for usernames
 	_, err = sqlDB.Exec(`ALTER TABLE users ADD FULLTEXT(name)`)
@@ -224,49 +231,80 @@ func createTable(name, fields string) {
 }
 
 func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// TODO see if you can use push notifications instead
+	// TODO check if the user is in the group
+
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
 	if len(split) != 5 {
 		serveBadRequest(w, r)
 		return
 	}
-	roomName, err := url.QueryUnescape(split[2])
-	userName, err := url.QueryUnescape(split[3])
-	timeStamp := split[4]
 
-	ms, err := strconv.ParseInt(timeStamp, 10, 64)
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
+	}
+
+	// Calculate timestamp in milliseconds at the moment of sending the request
+	lastMsgTimeStamp := split[3]
+	ms, err := strconv.ParseInt(lastMsgTimeStamp, 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 		return
 	}
 
-	sent := time.Unix(0, 0)
-	sent = sent.Add(time.Duration(ms) * time.Millisecond)
+	// Convert timestamp in milliseconds to unix timestamp
+	lastMsgUnix := time.Unix(0, 0)
+	lastMsgUnix = lastMsgUnix.Add(time.Duration(ms) * time.Millisecond)
+
+	// Calculate expiry timestamp
 	expires := time.Now().Add(listenerLifetime)
 
-	room := rooms[roomName]
-	listener := &Listener{
-		Writer:  w,
-		Request: r,
-		Name:    userName,
-		Used:    false,
-		Sent:    sent,
-		Expires: expires,
+	// ID of requester
+	userID, err := strconv.ParseInt((*claims)["id"].(string), 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
 	}
 
-	room.Listeners = append(room.Listeners, listener)
-	for !listener.Used {
-		time.Sleep(100 * time.Millisecond)
+	listener := &Listener{
+		Writer:      w,
+		Request:     r,
+		UserID:      userID,
+		Used:        false,
+		LastMsgTime: lastMsgUnix,
+		Expires:     expires,
 	}
-	cleanupListeners(room)
+
+	// ID of the group to listen to
+	groupID := split[4]
+
+	if listenergroups[groupID] == nil {
+		listenergroups[groupID] = &ListenerGroup{[]*Listener{}}
+	}
+	lGroup := listenergroups[groupID]
+
+	lGroup.Listeners = append(lGroup.Listeners, listener)
+
+	for !listener.Used && listener.Expires.After(time.Now()) {
+		fmt.Println(time.Now())
+		// TODO CHANGE TO 100
+		time.Sleep(1000 * time.Millisecond)
+	}
+	cleanupListeners(lGroup)
 }
 
 func respondToGetVapidPublic(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, vapidPublic)
 }
 
-func createUserJWT(id int64, name, email string) string {
+func createUserJWT(id int64, name string, email string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":  strconv.FormatInt(id, 10),
 		"aud": email,
@@ -358,21 +396,23 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO use QueryRows instead
-	rows, err := sqlDB.Query("SELECT id, password FROM users WHERE email=?", login.Email)
+	rows, err := sqlDB.Query("SELECT id, password, name FROM users WHERE email=?", login.Email)
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, "Could not find a user with that combination of email and password")
 		return
 	}
-
 	defer rows.Close()
 	rows.Next()
-	var id, password string
-	if err := rows.Scan(&id, &password); err != nil {
+	var id, password, name string
+	if err := rows.Scan(&id, &password, &name); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, "Could not find a user with that combination of email and password")
 		return
 	}
+
+	// The user does not send a username when logging in
+	login.Name = name
 
 	// Check if password is correct
 	err = bcrypt.CompareHashAndPassword([]byte(password), []byte(login.Password))
@@ -391,6 +431,7 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 
 	// Create and send authentication token
 	token := createUserJWT(int64(idInt), login.Name, login.Email)
+
 	// Expires after 31 days (one month)
 	cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
 	http.SetCookie(w, cookie)
@@ -805,7 +846,6 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO create a group
 func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
@@ -823,13 +863,13 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode message
+	// Decode group data
 	decoder := json.NewDecoder(r.Body)
 	groupData := CreateGroupData{}
 	err := decoder.Decode(&groupData)
 	if err != nil {
 		serveBadRequest(w, r)
-		fmt.Fprintln(w, "failed to decode message")
+		fmt.Fprintln(w, "failed to decode group data")
 		return
 	}
 
@@ -1052,7 +1092,7 @@ func validateJWTClaims(tokenString string) *jwt.MapClaims {
 	return nil
 }
 
-func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
+/*func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 	split := strings.Split(url, "/")
 	if len(split) != 4 {
@@ -1080,7 +1120,7 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	room.Subscribers = append(room.Subscribers, sub)
-}
+}*/
 
 func serveRequest(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
@@ -1139,15 +1179,15 @@ func serveBadRequest(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join("pages", "bad.html"))
 }
 
-func cleanupListeners(room *Room) {
+func cleanupListeners(lGroup *ListenerGroup) {
 	unused := []*Listener{}
-	for _, listener := range room.Listeners {
+	for _, listener := range lGroup.Listeners {
 		// If not used and not expired
 		if !listener.Used && listener.Expires.After(time.Now()) {
 			unused = append(unused, listener)
 		}
 	}
-	room.Listeners = unused
+	lGroup.Listeners = unused
 }
 
 func indexOf(slice []*Listener, elm *Listener) int {
@@ -1159,34 +1199,62 @@ func indexOf(slice []*Listener, elm *Listener) int {
 	return -1
 }
 
-func createRoom(name string, user string) {
-	rooms[name] = &Room{
-		Name:         name,
-		Messages:     []Message{},
-		Listeners:    []*Listener{},
-		Subscribers:  []Subscriber{},
-		ImageCount:   0,
-		MessageCount: 0,
-	}
-}
-
+// TODO
 func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Path
-	split := strings.Split(url, "/")
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
 	if len(split) != 4 {
 		serveBadRequest(w, r)
 		return
 	}
-	roomName := split[2]
-	userName := split[3]
 
-	room, ok := rooms[roomName]
-	if !ok {
-		createRoom(roomName, userName)
-		room = rooms[roomName]
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
 	}
 
-	res, err := json.Marshal(room.Messages)
+	groupID := split[3]
+
+	// Check if the requesting user is in the group he's trying to access
+	query := `SELECT created_at FROM group_members WHERE user_id=? AND group_id=?`
+	rows1, err := sqlDB.Query(query, (*claims)["id"], groupID)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+	defer rows1.Close()
+	if !rows1.Next() {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
+
+	// Gather all 30 most recen messages
+	query = `(SELECT id, sender_id, group_id, text, attachment_path, timestamp
+				FROM messages WHERE group_id=?)
+			ORDER BY timestamp DESC LIMIT 30`
+	rows2, err := sqlDB.Query(query, groupID)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+	defer rows2.Close()
+
+	messages := []Message{}
+	for rows2.Next() {
+		var msg Message
+		err := rows2.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.TimeStamp)
+		if err != nil {
+			fmt.Print(err)
+			return
+		}
+		messages = append(messages, msg)
+	}
+
+	res, err := json.Marshal(messages)
 	if err == nil {
 		json.NewEncoder(w).Encode(res)
 	} else {
@@ -1218,7 +1286,7 @@ func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
+/*func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 	// TODO REPLACE WITH NEW STUFF
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
@@ -1282,13 +1350,38 @@ func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 
 	// Send the path to the created file to the client
 	fmt.Fprint(w, "images/"+roomName+"_"+fileName)
-}
+}*/
 
 func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, "Wrong number of parameters for request")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
+	}
+
 	// Decode message
 	decoder := json.NewDecoder(r.Body)
 	var message Message
 	err := decoder.Decode(&message)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, err)
+		return
+	}
+
+	message.SenderID = (*claims)["id"].(string)
+
+	groupID, err := strconv.ParseInt(message.GroupID, 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintln(w, "このデータはおかしいです普通ではないです")
@@ -1304,15 +1397,34 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestURL := r.URL.Path
-	split := strings.Split(requestURL, "/")
-	if len(split) != 3 {
+	// Check if group exists
+	query := "SELECT group_name FROM chat_groups WHERE id=?"
+	rows, err := sqlDB.Query(query, groupID)
+	rows.Scan()
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(w, "Wrong number of parameters for request")
+		fmt.Fprint(w, err)
+		return
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "A group with id "+message.GroupID+" does not exist")
+		return
+	}
+
+	// TODO check if in group
+
+	query = "INSERT INTO messages (sender_id, group_id, text, attachment_path, timestamp) VALUES (?, ?, ?, ?, ?)"
+	_, err = sqlDB.Exec(query, (*claims)["id"], groupID, message.Text, "", time.Now())
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
 		return
 	}
 
 	// TODO fix this
+	notifyListeners(message)
 
 	// TODO ADD A MESSAGE LIMIT
 
@@ -1320,35 +1432,48 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "アウストラロピテクス")
 }
 
-func sendMessage(message Message, room *Room) {
-	// TODO
-	room.Messages = append(room.Messages, message)
-	notifyRoomMembers(message, room)
+func notifyListeners(message Message) {
+	fmt.Println(message.GroupID, "のパーティーで新しいメッセージが", message.SenderID, "から届いた")
+	lGroup, ok := listenergroups[message.GroupID]
+	if ok {
+		fmt.Println(message.GroupID, "のパーティーには", len(lGroup.Listeners), "つリスナーがあります")
+		handleListeners(message)
+	}
+
+	//sendNotifications(message)
 }
 
-func notifyRoomMembers(message Message, room *Room) {
-	// TODO
-	//fmt.Println(room.Name, "で新しいメッセージが", message.SenderName, "から届いた")
-	//fmt.Println(room.Name, "のルームには", len(room.Listeners), "つリスナーがあります")
-	handleListeners(room)
-	sendNotificationsInRoom(message, room)
-}
-
-func handleListeners(room *Room) {
-	for _, listener := range room.Listeners {
+func handleListeners(message Message) {
+	for _, listener := range listenergroups[message.GroupID].Listeners {
 		// If not used and not expired
 		if !listener.Used && listener.Expires.After(time.Now()) {
-			notRecieved := []*Message{}
-			for i := 0; i < len(room.Messages); i++ {
-				msg := room.Messages[i]
-				if msg.TimeStamp.After(listener.Sent) {
-					notRecieved = append(notRecieved, &msg)
-				}
-			}
-			if len(notRecieved) == 0 {
+			// TODO USE MESSAGE ID iNSTEAd of timestamp MAYBE
+			query := `SELECT id, sender_id, group_id, text, attachment_path, timestamp
+				FROM messages WHERE group_id=? AND timestamp>=?`
+			rows, err := sqlDB.Query(query, message.GroupID, listener.LastMsgTime)
+			if err != nil {
+				fmt.Print(err)
 				return
 			}
-			res, err := json.Marshal(notRecieved)
+
+			defer rows.Close()
+			messages := []Message{}
+			for rows.Next() {
+				var msg Message
+				err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.TimeStamp)
+				if err != nil {
+					fmt.Print(err)
+					return
+				}
+				messages = append(messages, msg)
+			}
+
+			if len(messages) == 0 {
+				fmt.Println("NO MESSAGES MATCHED")
+				return
+			}
+
+			res, err := json.Marshal(messages)
 			if err == nil {
 				json.NewEncoder(listener.Writer).Encode(res)
 				listener.Used = true
@@ -1359,7 +1484,7 @@ func handleListeners(room *Room) {
 	}
 }
 
-func sendNotificationsInRoom(message Message, room *Room) {
+/*func sendNotifications(message Message) {
 	for _, subscriber := range room.Subscribers {
 		// Don't send notification to the sender
 		//if subscriber.Name == message.SenderName {
@@ -1371,11 +1496,10 @@ func sendNotificationsInRoom(message Message, room *Room) {
 			//Sender: message.SenderName,
 			Text: message.Text,
 			Name: subscriber.Name,
-			Room: room.Name,
 		}
 		text, err := json.Marshal(notifContents)
 		if err != nil {
-			fmt.Println("おかしいなあ", err)
+			fmt.Fprintln(w, "おかしいなぁ このエラーが出てきた: "+err)
 		}
 
 		// Send Notification
@@ -1394,4 +1518,4 @@ func sendNotificationsInRoom(message Message, room *Room) {
 		fmt.Println("通知を送信できました　いいね！", resp.Status)
 		defer resp.Body.Close()
 	}
-}
+}*/

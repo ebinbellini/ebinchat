@@ -1,6 +1,9 @@
 "use strict";
 
+let user_email = undefined;
 let user_name = undefined;
+let user_id = 0;
+
 let jwt_token = undefined;
 let cookies_ok = false;
 
@@ -47,7 +50,7 @@ function display_cookie_banner() {
 	are_cookies_allowed();
 	const banner = document.createElement("div");
 	banner.setAttribute("id", "cookie-banner");
-	banner.innerHTML = `This website has cookies!
+	banner.innerHTML = `This website uses cookies!
 	<div style="margin-bottom: 8px"></div>
 	<a href="/privacy#cookies"><div class="button-flat">Read More</div></a>
 	<div class="button" onclick="remove_cookie_banner()">OK</div>`;
@@ -239,6 +242,13 @@ function check_logged_in() {
 			if (valid) {
 				setTimeout(display_logged_in_ui, 800);
 				jwt_token = auth;
+
+				requestAnimationFrame(() => {
+					const parsed = parse_jwt(jwt_token);
+					user_email = parsed.aud;
+					user_name = parsed.sub;
+					user_id = parsed.id;
+				})
 			} else {
 				login();
 			}
@@ -355,40 +365,167 @@ function create_contact_button(data) {
 function open_conversation(group_data) {
 	return event => {
 		console.log(group_data);
-		const window = create_big_window(group_data.groupName);
 
-		const message_input = create_a_search_bar("Enter a message", "pen");
+		const big_window = create_big_window(group_data.groupName);
+
+		// Reversal container to enable automatic resizing of textarea
+		const content = document.createElement("div");
+		content.className = "reversal-container";
+
+		// Input to type messages
+		const message_input = create_a_textarea();
 		message_input.id = "message-input";
-		window.appendChild(message_input);
+		message_input.addEventListener("keydown", message_input_keydown(group_data));
+		content.appendChild(message_input);
 
-		const send_button = document.createElement("img");
-		send_button.src = "icons/airplane.svg";
-		send_button.id = "send-button";
-		send_button.addEventListener("click", send_message(message_input.children[0]));
+		// Enable clicking the send button to send messages 
+		const send_button = message_input.getElementsByClassName("send-button")[0];
+		send_button.addEventListener("click", () => send_message(message_input.children[0], group_data));
 
-		window.appendChild(send_button);
+		// Container for messages
+		const message_container = document.createElement("div");
+		message_container.className = "messages"
+		content.appendChild(message_container);
+
+		// Add the reversal container to the big window
+		big_window.appendChild(content);
+
+		display_previous_messages(group_data);
+		await_messages_from_group(group_data);
 	};
 }
 
-function send_message(input) {
+function display_previous_messages(group_data) {
+	get("/messages/", group_data.groupID).then(resp => {
+		resp.text().then(text => {
+			if (resp.ok) {
+				//console.log(atob(text.split("\"").join("")));
+				const messages = base64_json_to_object(text);
+				console.log(messages);
+				for (const message_data of messages) {
+					const msg_element = create_message_element(message_data);
+					insert_message(msg_element);
+				}
+			} else {
+				display_snackbar(text);
+			}
+		});
+	});
+}
+
+function insert_message(message_element) {
+	const message_list = document.getElementsByClassName("messages")[0];
+	const nodes = Array.from(message_list.children);
+	const insert_timestamp = Date.parse(message_element.getAttribute("timestamp"));
+	const insert_msg_id = message_element.getAttribute("id");
+
+	// Check for duplicates
+	if (
+		nodes.find(node =>
+			node.getAttribute("id") == insert_msg_id
+		) != undefined
+	) return;
+
+	// Update last message time
+	if (insert_msg_id > last_message_time)
+		last_message_time = insert_msg_id;
+
+	// Sort with the messages newest first
+	const sorted = nodes.sort((a, b) => {
+		const a_t = Date.parse(a.getAttribute("timestamp"));
+		const b_t = Date.parse(b.getAttribute("timestamp"));
+		return b_t - a_t;
+	});
+
+	// Look for older  messages than this
+	for (const node of sorted) {
+		const this_timestamp = Date.parse(node.getAttribute("timestamp"));
+
+		if (insert_timestamp < this_timestamp ) {
+			// Found an older message. Insert after it.
+			message_list.insertBefore(message_element, node.nextElementSibling);
+			return;
+		}
+	}
+
+	// This is the latest message. Insert it at the end of the message list.
+	message_list.appendChild(message_element);
+}
+
+function create_message_element(message_data) {
+	const message_container = document.createElement("div");
+	message_container.classList.add("message-container");
+
+	for (const key in message_data) {
+		message_container.setAttribute(key, message_data[key]);
+	}
+
+	if (message_data.senderID == user_id) {
+		message_container.classList.add("from-me");
+	}
+
+	const message = document.createElement("div");
+	message.classList.add("message");
+	message.innerText = message_data.text;
+	message_container.appendChild(message);
+
+	return message_container;
+}
+
+function await_messages_from_group(group_data) {
+	get("/awaitmessages/", last_message_time + "/" + group_data.groupID).then(resp => {
+		console.log(resp);
+		resp.text().then(text => {
+			if (resp.ok) {
+				const messages = base64_json_to_object(text);
+				console.log(messages.length, " new messages");
+
+				for (const message_data of messages) {
+					const msg_element = create_message_element(message_data);
+					insert_message(msg_element);
+				}
+				await_messages_from_group(group_data);
+			} else {
+				display_snackbar(text);
+			}
+		});
+	});
+}
+
+function message_input_keydown(group_data) {
 	return event => {
-		const message = input.value;
-		console.log(message);
-		fetch("/sendmessage/" + jwt_token, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				text: message
-			})
-		}).then(resp => {
-			console.log(resp);
-			resp.text().then(text => {
-				console.log(text);
+		const input = event.target;
+		// TODO enter on mobile should not send
+		if (!event.shiftKey && event.code == "Enter") {
+			// Remove enter from the end of value
+			requestAnimationFrame(() => {
+				input.value = trim_enters(input.value);
+				if (input.value.length > 0) {
+					send_message(input, group_data);
+				}
 			});
+		}
+	}
+}
+
+function send_message(input, group_data) {
+	// TODO MAX TEXT SIZE 1024 8-bit characters
+	fetch("/sendmessage/" + jwt_token, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			text: input.value,
+			groupID: group_data.groupID
 		})
-	};
+	}).then(resp => {
+		if (resp.ok) {
+			input.value = "";
+		} else {
+			display_snackbar("Could not send message. " + text);
+		}
+	});
 }
 
 function create_big_window(title) {
@@ -1038,7 +1175,7 @@ function create_a_search_bar(purpose, icon) {
 
 	// Add content to search bar
 	search_bar.innerHTML = `<input type="text" placeholder="${purpose}">
-		<svg class="magnifying-glass" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
+		<svg class="input-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
 			<path d="M 4.2336235,2.2489583 A 1.9846654,1.9846656 0 0 1 2.249088,4.233624 1.9846654,1.9846656 0 0 1 0.26429273,2.2492181 1.9846654,1.9846656 0 0 1 2.2485684,0.26429276 1.9846654,1.9846656 0 0 1 4.2336234,2.2484387" sodipodi:arc-type="arc" sodipodi:open="true" sodipodi:end="6.2829235" sodipodi:start="0" sodipodi:ry="1.9846656" sodipodi:rx="1.9846654" sodipodi:cy="2.2489583" sodipodi:cx="2.2489581" sodipodi:type="arc" style="fill:none;fill-opacity:1;stroke:#484848;stroke-width:0.528585;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"></path>
 			<path d="M 3.6155998,3.6149312 6.1739834,6.1878656 Z" style="fill:none;stroke:#484848;stroke-width:0.496894;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"></path>
 		</svg>
@@ -1059,15 +1196,53 @@ function create_a_search_bar(purpose, icon) {
 	if (icon == "pen") {
 		// Create a pen icon
 		const pen = document.createElement("img");
-		pen.classList.add("magnifying-glass");
+		pen.classList.add("input-icon");
 		pen.src = "icons/pen.svg";
 
 		// Replace magnifying glass with the pen icon
-		const アメリア = search_bar.getElementsByClassName("magnifying-glass")[0];
+		const アメリア = search_bar.getElementsByClassName("input-icon")[0];
 		アメリア.replaceWith(pen);
 	}
 
 	return search_bar;
+}
+
+function create_a_textarea() {
+	// Create search bar element
+	const container = document.createElement("div");
+	container.classList.add("search-bar");
+
+	// Add content to search bar
+	container.innerHTML = `<textarea placeholder="Type a message"></textarea>
+		<img class="input-icon" src="icons/clip.svg">
+		<img class="send-button" src="icons/airplane.svg">`;
+
+	const textarea = container.children[0];
+
+	textarea.addEventListener("input", event => {
+		textarea.style.height = 'auto';
+		const height = Math.min(textarea.scrollHeight, window.innerHeight / 2);
+		textarea.style.height = height + "px";
+	});
+
+	// Assumes that the textarea is inserted quickly
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => {
+			textarea.style.height = textarea.scrollHeight + "px";
+		});
+	});
+
+	return container;
+}
+
+function trim_enters(string) {
+	if (string[0] === "\n") {
+		string = string.substr(1);
+	}
+	if (string[string.length - 1] === "\n") {
+		string = string.slice(0, -1);
+	}
+	return string;
 }
 
 function fullscreen_shade() {
@@ -1219,512 +1394,3 @@ function log_out() {
 	document.cookie = "auth=0;expires=Thu, 01 Jan 1970 00:00:01 GMT"
 	location.reload();
 }
-
-/*async function register_service_worker() {
-	if ("serviceWorker" in navigator) {
-		navigator.serviceWorker.register("sw.js");
-
-		// TODO subscribe when user types /subscribe and clicks button
-		// also TODO remove async from this function
-		const response = await get("vapid")
-		const serverKey = await response.text()
-
-		// TODO simplify below
-		navigator.serviceWorker.ready.then(registration => {
-			registration.pushManager.getSubscription().then(subscription => {
-				const json = subscription.toJSON();
-				fetch(`subscribe/${room_name}/${user_name}`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify(json)
-				});
-
-			}).catch(e => {
-				// Subscribe
-				const options = {
-					userVisibleOnly: true,
-					applicationServerKey: serverKey
-				};
-				registration.pushManager.subscribe(options).then(subscription => {
-					fetch(`subscribe/${room_name}/${user_name}`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json'
-						},
-						body: JSON.stringify(subscription.toJSON())
-					});
-				}, error => {
-					console.log(error);
-				})
-			});
-		});
-	}
-}
-
-function get_messages() {
-	get("messages").then(response => {
-		if (response.ok) {
-			response.text().then(messages => {
-				const list = base64_to_json(messages);
-				for (const message of list) {
-					display_message(message);
-				}
-				await_messages();
-				const container = document.getElementById("messages");
-				setTimeout(() => {
-					container.scrollTop = container.scrollHeight;
-				}, 500);
-			});
-		}
-	});
-}
-
-function display_message(message) {
-	last_message_time = 1 + new Date(message.TimeStamp).getTime();
-
-	// Decode message object
-	message.Text = escape(message.Text);
-	message.AttachmentPath = escape(message.AttachmentPath);
-	for (const field of ["SenderName", "Text", "AttachmentPath"]) {
-		message[field] = decodeURIComponent(message[field]);
-	}
-
-	// Build message element
-	const container = document.createElement("div");
-	container.classList.add("message-container");
-	const element = document.createElement("div");
-	element.classList.add("message");
-	container.appendChild(element);
-
-	// Name tag
-	const name_tag = document.createElement("span");
-	name_tag.style.color = `hsl(${Math.abs(unsecure_string_hash(message.SenderName)) % 256}, 100%, 70%)`;
-	name_tag.innerText = message.SenderName + ": ";
-	name_tag.classList.add("name-tag");
-	element.appendChild(name_tag);
-
-	// Message text
-	const text = document.createElement("span");
-	text.innerText = message.Text;
-	element.appendChild(text);
-
-	// Insert attachment if there is one
-	if (message.AttachmentPath != "") {
-		const img = document.createElement("img");
-		img.src = message.AttachmentPath;
-		element.appendChild(img);
-	}
-
-	insert_message(container);
-}
-
-function insert_message(message) {
-	const messages = document.getElementById("messages");
-	const at_bottom = messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 2;
-	messages.append(message);
-
-	// Scroll view to the new message if already scrolled down max
-	if (at_bottom) {
-		const images = message.getElementsByTagName("img");
-		if (images.length > 0) {
-			for (const image of images) {
-				image.addEventListener("load", () => {
-					requestAnimationFrame(() => {
-						messages.scrollTop = messages.scrollHeight;
-					});
-				});
-			}
-		}
-
-		requestAnimationFrame(() => {
-			messages.scrollTop = messages.scrollHeight;
-		});
-	}
-}
-
-function query_string_values() {
-	return window.location.search.substring(1).split("&").map(mapping =>
-		mapping.split("=")[1]);
-}
-
-function trim_enters(string) {
-	if (string[0] === "\n") {
-		string = string.substr(1);
-	}
-	if (string[string.length - 1] === "\n") {
-		string = string.slice(0, -1);
-	}
-	return string;
-}
-
-function set_send_message_handlers() {
-	const arrow = document.getElementById("arrow");
-	const input = document.getElementById("msg_input");
-	arrow.addEventListener("click", event => {
-		if (arrow.classList.contains("active")) {
-			const text = input.value;
-			send_message(text);
-		}
-	});
-	input.addEventListener("keydown", input_keydown);
-}
-
-function input_keydown(event) {
-	const input = document.getElementById("msg_input");
-	if (!event.shiftKey && event.code == "Enter") {
-		if (autocompleter_is_up()) {
-			insert_selected_command();
-		} else {
-			// Remove enter from the end of value
-			requestAnimationFrame(() => {
-				input.value = trim_enters(input.value);
-				if (input.textLength > 0) {
-					send_message(input.value);
-				}
-			});
-		}
-	} else if (event.code === "ArrowUp") {
-		if (autocompleter_is_up()) {
-			set_autocomplete_position("up");
-		} else {
-			if (history[history_index] !== undefined) {
-				input.value = history[history_index];
-				history_index--;
-			}
-		}
-	} else if (event.code === "ArrowDown") {
-		if (autocompleter_is_up()) {
-			set_autocomplete_position("down");
-		} else {
-			if (history[history_index + 1] !== undefined) {
-				history_index++;
-				input.value = history[history_index];
-			}
-		}
-	} else {
-		requestAnimationFrame(() => {
-			update_autocompleter(input.value);
-		})
-	}
-
-	requestAnimationFrame(arrow_controller);
-}
-
-function set_autocomplete_position(change) {
-	const autocompleter = document.getElementById("autocompleter");
-	const children = autocompleter.children
-	let selected = autocompleter.querySelector(".selected");
-	selected.classList.remove("selected");
-	if (change == "up") {
-		const next = selected.previousSibling;
-		if (next == null)
-			selected = children[children.length - 1];
-		else
-			selected = next;
-	} else if (change == "down") {
-		const next = selected.nextSibling;
-		if (next == null)
-			selected = children[0];
-		else
-			selected = next;
-	}
-	selected.classList.add("selected");
-}
-
-function update_autocompleter(value) {
-	if (value[0] == "/" && !value.includes(" ")) {
-		autocomplete(value.substr(1));
-	} else {
-		hide_autocompleter();
-	}
-}
-
-function autocompleter_is_up() {
-	return document.getElementById("autocompleter").classList.contains("displayed");
-}
-
-function hide_autocompleter() {
-	const autocompleter = document.getElementById("autocompleter");
-	autocompleter.innerText = "";
-	autocompleter.classList.remove("displayed");
-}
-
-function autocomplete(text) {
-	const autocompleter = document.getElementById("autocompleter");
-	const parent = autocompleter.parentNode;
-	const height = parent.clientHeight;
-	autocompleter.style.bottom = (height - 8) + "px";
-	const matches = [];
-	for (const command of commands) {
-		for (const value of ["name", "info"]) {
-			if (command[value].toLowerCase().includes(text)) {
-				matches.push(command);
-				break;
-			}
-		}
-	}
-
-	if (matches.length > 0)
-		autocompleter.classList.add("displayed");
-	else
-		autocompleter.classList.remove("displayed");
-
-	let html = "";
-	matches.forEach((cmd, index) => {
-		const color = `hsl(${2 + index * 4}, 83%, 66%)`;
-		html += `<div class="suggestion" onclick="chose_suggestion('${cmd.name}')">
-			<span style="color: ${color}">${cmd.name}</span> - ${cmd.info}
-		</div>`
-	});
-
-	autocompleter.innerHTML = html;
-
-	requestAnimationFrame(() => {
-		const children = autocompleter.children;
-		if (children.length > 0)
-			children[0].classList.add("selected");
-	});
-}
-
-function chose_suggestion(name) {
-	const input = document.getElementById("msg_input");
-	input.value = `/${name} `;
-	input.focus();
-	requestAnimationFrame(() => update_autocompleter(input.value));
-}
-
-function insert_selected_command() {
-	const select = document.querySelector("#autocompleter .selected");
-	select.onclick();
-	requestAnimationFrame(() => {
-		const input = document.getElementById("msg_input");
-		update_autocompleter(input.value);
-	})
-}
-
-function set_scroll_handler() {
-	const messages = document.getElementById("messages");
-	messages.addEventListener("scroll", () => {
-		user_scrolled = true;
-	});
-}
-
-function send_message(text, check_command = true) {
-	hide_autocompleter();
-
-	text = trim_enters(text);
-
-	// Store in history
-	if (history[history.length - 1] != text) {
-		history.push(text);
-	}
-	history_index = history.length - 1;
-
-	// Empty field
-	const input = document.getElementById("msg_input");
-	input.value = "";
-
-	// Disable send button
-	const arrow = document.getElementById("arrow");
-	arrow.classList.remove("active");
-
-	// Run command instead of sending message if text starts with "/"
-	if (check_command && text.startsWith("/")) {
-		run_command(text);
-		return;
-	}
-
-	// Send message
-	post_message_object({
-		SenderName: user_name,
-		Text: text,
-		AttachmentPath: "",
-		TimeStamp: undefined
-	}, room_name);
-}
-
-function post_message_object(message, room) {
-	fetch("sendmessage/" + room, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify(message)
-	});
-}
-
-function run_command(text) {
-	// Remove "/" from beginning
-	text = text.substr(1);
-	let words = text.split(" ");
-	command_name = words[0];
-	const command = find_command(command_name);
-	if (!command) {
-		display_command_message(`Command "${command_name}" could not be found`);
-	} else {
-		words.shift()
-		words = words.join(" ");
-		const type = command.arg;
-		if (matches_type(type, words)) {
-			command.func(words);
-		} else {
-			display_command_message("You have to specify a parameter of type " + type);
-		}
-	}
-}
-
-function matches_type(type, value) {
-	if (type === "none")
-		return true;
-	if (value === "")
-		return type === "none" || type === "number";
-	else if (type === "number") {
-		return parseInt(value) !== Math.NaN;
-	} else if (type === "string") {
-		return typeof (value) === "string" && value.length > 0;
-	} else {
-		return false;
-	}
-}
-
-function await_messages() {
-	get("awaitmessages", last_message_time).then(response => {
-		if (!response.ok) {
-			response.text().then(body => {
-				if (body == "Timeout") {
-					await_messages();
-				} else {
-					disconnected("Unknown error");
-				}
-			}).catch(error => {
-				disconnected(error);
-			});
-		} else {
-			response.text().then(text => {
-				const list = base64_to_json(text);
-				for (const message of list) {
-					display_message(message);
-				}
-				await_messages();
-			});
-		}
-	}).catch(error => {
-		disconnected("Failed to connect");
-	});
-}
-
-function reconnect() {
-	hide_all_dialogs();
-	await_messages();
-}
-
-function unsecure_string_hash(string) {
-	let hash = 0;
-	let i;
-	let char;
-	for (i = 0; i < string.length; i++) {
-		char = string.charCodeAt(i);
-		hash = ((hash << 5) - hash) + char;
-		hash |= 0;
-	}
-	return hash;
-}
-
-function find_command(name) {
-	for (const command of commands) {
-		if (command.name == name) {
-			return command;
-		}
-	}
-	return undefined;
-}
-
-function display_command_message(message) {
-	// Build message element
-	const container = document.createElement("div");
-	container.classList.add("message-container");
-	const element = document.createElement("div");
-	element.classList.add("message");
-	container.appendChild(element);
-
-	// Message text
-	element.innerHTML = message;
-
-	insert_message(container);
-}
-
-function upload_file(input) {
-	const file = input.files[0];
-	const name = file.name;
-	file.arrayBuffer().then(buffer => {
-		fetch(`/uploadfile/${room_name}/${name}`, {
-			method: 'POST',
-			body: buffer
-		}).then(response => {
-			response.text().then(filepath => {
-				post_message_object({
-					SenderName: user_name,
-					Text: "",
-					AttachmentPath: filepath,
-					TimeStamp: undefined
-				}, room_name);
-			});
-
-			remove_message(input.parentNode);
-		}).catch(e => display_dialog(e));
-	});
-}*/
-
-/* ===================== Begin commands ===================== */
-
-/*function help(arg) {
-	let text = "";
-	if (arg.length > 0) {
-		command_name = arg;
-		const command = find_command(command_name);
-		if (command) {
-			text = `<h4>${command.name}: ${command.info}</h4>${command.extended}`;
-		} else {
-			text = "Could not find command " + command_name;
-		}
-	} else {
-		text += "<table><tbody>"
-		for (const command of commands) {
-			text += `<tr onclick="chose_suggestion('${command.name}')">
-				<th>${command.name}</th>
-				<th>${command.info}</th>
-			</tr>`;
-		}
-	}
-	display_command_message(text);
-}
-
-function dance(number) {
-	if (number == "") {
-		number = Math.floor(Math.random() * 8) + 1;
-		localStorage.setItem("bg", number);
-		send_attachment(`dances/dance${number}.gif`);
-	} else if (number && number == "0" || parseInt(number) === Math.NaN || 0 > parseInt(number) || 8 < parseInt(number)) {
-		display_command_message(`There is no dance with the number ${number}.`)
-	} else {
-		send_attachment(`dances/dance${number}.gif`);
-	}
-}
-
-function beer() {
-	send_attachment("imgs/beer.jfif");
-}
-
-function elit() {
-	display_command_message(`<marquee style="width: fit-content"><h4>ÅÅÅÅH KLOCKAN ÄR TRETTONTRETTIOSJUU ELIIIIIIT</h4></marquee>
-		<br>
-		Only you can see this LOLE`);
-}
-
-function say(text) {
-	send_message(text, false);
-}*/
-
-/* ===================== End of commands ===================== */

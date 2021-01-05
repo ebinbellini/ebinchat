@@ -89,7 +89,6 @@ main header {
     position: absolute;
     top: 122px;
     width: 100%;
-    height: 120%;
     min-height: calc(100% - 122px);
     border-radius: 16px 16px 0 0;
     background: linear-gradient(90deg, #f1f1f1, #e0e0e0);
@@ -408,7 +407,7 @@ label {
     background: #48484820;
 }
 
-header .search-bar input {
+header .search-bar input, header .search-bar textarea {
     box-shadow: 0 2px 4px -1px rgba(0, 0, 0, .12), 0 4px 5px 0 rgba(0, 0, 0, .08), 0 1px 10px 0 rgba(0, 0, 0, .06);
 }
 
@@ -418,7 +417,7 @@ header .search-bar input {
     position: relative;
 }
 
-.search-bar input {
+.search-bar input, .search-bar textarea {
     width: 100%;
     padding: 6px 8px 6px 30px;
     margin: 4px 0;
@@ -431,12 +430,12 @@ header .search-bar input {
     transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-bar input::placeholder {
+.search-bar input::placeholder, .search-bar textarea::placeholder {
     color: #888;
     transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-bar .magnifying-glass {
+.search-bar .input-icon {
     position: absolute;
     left: 4px;
     top: 0;
@@ -446,11 +445,11 @@ header .search-bar input {
     transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-bar .magnifying-glass path {
+.search-bar .input-icon path {
     transition: 200ms;
 }
 
-.search-bar input:focus {
+.search-bar input:focus, .search-bar textarea:focus {
     display: inline-block;
     color: #595959;
     padding-left: 36px;
@@ -473,18 +472,18 @@ header .search-bar input {
     margin: 10px 0;
 }
 
-.search-bar input:focus~.cancel {
+.search-bar input:focus~.cancel, .search-bar textarea:focus~.cancel {
     opacity: 1;
     transform: scale(0.7);
     cursor: pointer;
 }
 
-.search-bar input:focus+.magnifying-glass {
+.search-bar input:focus+.input-icon, .search-bar textarea:focus+.input-icon {
     transform: scale(0.70);
     left: 7px;
 }
 
-.search-bar input:focus::placeholder {
+.search-bar input:focus::placeholder, .search-bar textarea:focus::placeholder {
     color: rgba(0, 0, 0, 0);
 }
 
@@ -870,12 +869,13 @@ header .search-bar input {
 .big-window {
     position: absolute;
     top: 5%;
-    left: 0;
+    right: 0;
     width: 100%;
     height: 100%;
     background: #fafafa;
     box-shadow: 0 3px 30px 3px rgba(0, 0, 0, 0.08), 0 4px 40px rgba(0, 0, 0, 0.15);
     border-radius: 12px;
+    background: linear-gradient(90deg, #e9e9e9, #f7f7f7);
     opacity: 0;
     transform: scale(0.9);
     transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -897,12 +897,25 @@ header .search-bar input {
     padding: 16px;
     cursor: pointer;
     transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    transform: scale(0.9);
+    transform: scale(0.8);
     z-index: 10;
 }
 
+.big-window .close-button:hover {
+    transform: scale(0.9);
+}
+
 .big-window .close-button:active {
-    transform: scale(0.7);
+    transform: scale(0.65);
+}
+
+.big-window .reversal-container {
+    height: calc(100% - 56px);
+    display: flex;
+    max-width: 600px;
+    margin: auto;
+    margin-top: 56px;
+    flex-direction: column-reverse;
 }
 
 .big-window header {
@@ -912,24 +925,56 @@ header .search-bar input {
     width: 100%;
     height: 56px;
     font-size: 24px;
+    font-weight: 500;
     line-height: 56px;
     padding-left: 56px;
     color: #212121;
     box-sizing: border-box;
     text-shadow: -2px -2px 2px #e0e6d130, 2px 2px 2px #6d957b80;
-    background: linear-gradient(45deg, #56856a, #f2f2de);
+    background: linear-gradient(45deg, #f2f2de, #76a68a);
+    box-shadow: 0 3px 30px 3px rgba(0, 0, 0, 0.08), 0 4px 40px rgba(0, 0, 0, 0.15);
 }
 
-.big-window #message-input {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: calc(100% - 64px);
+.big-window #message-input textarea {
+    display: block;
+    font-family: "Cabin", sans-serif !important;
+    padding: 4px 40px 4px 36px;
+    border: 2px solid #484848;
+    overflow-y: hidden;
+    resize: none;
+    transition: 200ms;
+    min-height: 34px;
 }
 
-.big-window #send-button {
+.big-window #message-input textarea:not(:focus) {
+    height: 34px !important;
+}
+
+.big-window #message-input .input-icon {
+    top: 8px;
+    left: 6px;
+    bottom: unset;
+    margin: 0;
+    cursor: pointer;
+    transform: scale(0.9);
+    transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.big-window #message-input .input-icon:hover {
+    transform: scale(1);
+}
+
+.big-window #message-input .input-icon:active {
+    transform: scale(0.8);
+}
+
+.big-window #message-input .cancel {
+    display: none;
+}
+
+.big-window .send-button {
     position: absolute;
-    bottom: 4px;
+    top: -4px;
     right: 0;
     padding: 8px;
     cursor: pointer;
@@ -937,12 +982,49 @@ header .search-bar input {
     transition: 200ms;
 }
 
-.big-window #send-button:hover {
+.big-window .send-button:hover {
     transform: scale(0.95);
 }
 
-.big-window #send-button:active {
+.big-window .send-button:active {
     transform: scale(0.7);
+}
+
+.big-window .messages {
+    padding: 12px 8px 12px 8px;
+    overflow: auto;
+    scroll-behavior: smooth;
+}
+
+/*  TODO put the messages toghether if time difference is
+    less than 2 minutes */
+
+.big-window .messages .message-container {
+    width: 100%;
+    padding: 8px 4px;
+    clear: both;
+}
+
+.big-window .messages .message-container .message {
+    padding: 4px 8px;
+    background: #ffffffba;
+    border-radius: 8px;
+    float: left;
+    /* 3D lole */
+    /*
+        border-bottom: 3px solid #0000003D;
+        
+        #547561
+    */
+    box-shadow: 0 3px #bdbdbd;
+    width: fit-content;
+}
+
+.big-window .messages .message-container.from-me .message {
+    float: right;
+    background: #6f9a7f;
+    color: #fafafa;
+    box-shadow: 0 3px #547561;
 }
 
 @media screen and (max-width: 500px) {
@@ -951,7 +1033,7 @@ header .search-bar input {
     }
 }
 
-@media screen and (min-width: 600px) {
+@media screen and (min-width: 700px) {
     main, .bottom-sheet {
         transform: scale(1) !important;
         min-width: 380px;
@@ -963,7 +1045,15 @@ header .search-bar input {
         opacity: 1 !important;
         box-shadow: none;
     }
+    .big-window {
+        width: 60%;
+        box-shadow: none;
+        max-width: calc(100vw - 380px);
+        border-left: 2px solid #0000003D;
+    }
     .shade {
         display: none;
     }
 }
+
+/* TODO IF SCREEN IS BIG ENOUGH SHOW PARTICIPANTS TO THE RIGHT */
