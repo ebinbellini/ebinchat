@@ -64,7 +64,8 @@ function remove_cookie_banner() {
 	cookies_ok = true;
 	setTimeout(() => {
 		banner.remove();
-		document.cookie = "cookies_allowed=yes";
+		date.setTime(date.getTime() + (31*24*60*60*1000));
+		document.cookie = `auth=${value};expires=${date};path=/`;
 	}, 300);
 }
 
@@ -119,6 +120,12 @@ function click_form_input() {
 	}, 500);
 }
 
+function set_auth_cookie(value) {
+	var date = new Date();
+	date.setTime(date.getTime() + (31*24*60*60*1000));
+	document.cookie = `auth=${value};expires=${date};path=/`;
+}
+
 function submit_signup_form(e) {
 	const form = document.getElementById("signup");
 	const values = form_values(form);
@@ -130,8 +137,8 @@ function submit_signup_form(e) {
 			},
 			body: JSON.stringify(values)
 		}).then(response => {
-			if (!response.ok) {
-				response.text().then(text => {
+			response.text().then(text => {
+				if (!response.ok || text.includes(" ")) {
 					if (text.startsWith("Error 1062")) {
 						if (text.endsWith('users.name')) {
 							display_snackbar("The name " + values.name + " has already been taken");
@@ -141,10 +148,11 @@ function submit_signup_form(e) {
 					} else {
 						display_snackbar("An unknown error occurred!");
 					}
-				});
-			} else {
-				check_logged_in();
-			}
+				} else {
+					set_auth_cookie(text);
+					check_logged_in();
+				}
+			});
 		});
 	}
 	return false;
@@ -161,13 +169,14 @@ function submit_login_form(e) {
 			},
 			body: JSON.stringify(values)
 		}).then(response => {
-			if (!response.ok) {
-				response.text().then(text => {
+			response.text().then(text => {
+				if (!response.ok || text.includes(" ")) {
 					display_snackbar(text);
-				});
-			} else {
-				check_logged_in();
-			}
+				} else {
+					set_auth_cookie(text);
+					check_logged_in();
+				}
+			});
 		});
 	}
 	return false;

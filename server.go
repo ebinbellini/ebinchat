@@ -156,7 +156,7 @@ func generateHMACPrivateKey() {
 func openMySQLDatabase() {
 	// Password for test database. Won't work on the real server.
 	// benim:liksomvadeupposv@localhost:3306/echeveria
-	db, err := sql.Open("mysql", "benim:liksomvadeupposv@(127.0.0.1:3306)/echeveria?parseTime=true")
+	db, err := sql.Open("mysql", "root:thispasswordisprivate@(127.0.0.1:3306)/echeveria?parseTime=true")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -293,7 +293,6 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	lGroup.Listeners = append(lGroup.Listeners, listener)
 
 	for !listener.Used && listener.Expires.After(time.Now()) {
-		fmt.Println(time.Now())
 		// TODO CHANGE TO 100
 		time.Sleep(1000 * time.Millisecond)
 	}
@@ -377,9 +376,10 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 	// Create and send authentication token
 	token := createUserJWT(id, signup.Name, signup.Email)
 	// Expires after 31 days (one month)
-	cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
+	/*cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
 	http.SetCookie(w, cookie)
-	fmt.Fprint(w, "Success! ▼・ᴥ・▼")
+	fmt.Fprint(w, "Success! ▼・ᴥ・▼")*/
+	fmt.Fprintln(w, token)
 }
 
 func respondToLogIn(w http.ResponseWriter, r *http.Request) {
@@ -433,9 +433,10 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 	token := createUserJWT(int64(idInt), login.Name, login.Email)
 
 	// Expires after 31 days (one month)
-	cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
+	/*cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
 	http.SetCookie(w, cookie)
-	fmt.Fprintln(w, "Authenticated!")
+	fmt.Fprintln(w, "Authenticated!")*/
+	fmt.Fprintln(w, token)
 }
 
 func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
