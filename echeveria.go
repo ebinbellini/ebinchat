@@ -235,7 +235,6 @@ func createTable(name, fields string) {
 
 func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO see if you can use push notifications instead
-	// TODO check if the user is in the group
 
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
@@ -284,6 +283,14 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	// ID of the group to listen to
 	groupID := split[4]
 
+	// Is the user in this group?
+	if !isUserInGroup(strconv.FormatInt(userID, 10), groupID) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
+
+	// Initialize if none exists
 	if listenergroups[groupID] == nil {
 		listenergroups[groupID] = &ListenerGroup{[]*Listener{}}
 	}
@@ -393,17 +400,14 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO use QueryRows instead
-	rows, err := sqlDB.Query("SELECT id, password, name FROM users WHERE email=?", login.Email)
+	row := sqlDB.QueryRow("SELECT id, password, name FROM users WHERE email=?", login.Email)
 	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, "Could not find a user with that combination of email and password")
 		return
 	}
-	defer rows.Close()
-	rows.Next()
 	var id, password, name string
-	if err := rows.Scan(&id, &password, &name); err != nil {
+	if err := row.Scan(&id, &password, &name); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, "Could not find a user with that combination of email and password")
 		return
@@ -1210,35 +1214,28 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 
 	groupID := split[3]
 
-	// Check if the requesting user is in the group he's trying to access
-	query := `SELECT created_at FROM group_members WHERE user_id=? AND group_id=?`
-	rows1, err := sqlDB.Query(query, (*claims)["id"], groupID)
-	if err != nil {
-		fmt.Print(err)
-		return
-	}
-	defer rows1.Close()
-	if !rows1.Next() {
+	// Check if user is in group
+	if !isUserInGroup((*claims)["id"].(string), groupID) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "You're not in that group")
 		return
 	}
 
-	// Gather all 30 most recen messages
-	query = `(SELECT id, sender_id, group_id, text, attachment_path, timestamp
+	// Gather the 30 most recent messages
+	query := `(SELECT id, sender_id, group_id, text, attachment_path, timestamp
 				FROM messages WHERE group_id=?)
 			ORDER BY timestamp DESC LIMIT 30`
-	rows2, err := sqlDB.Query(query, groupID)
+	rows, err := sqlDB.Query(query, groupID)
 	if err != nil {
 		fmt.Print(err)
 		return
 	}
-	defer rows2.Close()
+	defer rows.Close()
 
 	messages := []Message{}
-	for rows2.Next() {
+	for rows.Next() {
 		var msg Message
-		err := rows2.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.TimeStamp)
+		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.TimeStamp)
 		if err != nil {
 			fmt.Print(err)
 			return
@@ -1252,6 +1249,22 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	} else {
 		serveInternalError(w, r)
 	}
+}
+
+func isUserInGroup(userID, groupID string) bool {
+	// Check if the requesting user is in the group he's trying to access
+	query := `SELECT 1 FROM group_members WHERE user_id=? AND group_id=?`
+	var epin int64
+	err := sqlDB.QueryRow(query, userID, groupID).Scan(&epin)
+
+	// https://stackoverflow.com/questions/37145935/checking-if-a-value-exists-in-sqlite-db-with-go
+	if err != nil {
+		if err != sql.ErrNoRows {
+			fmt.Println(err)
+		}
+		return false
+	}
+	return true
 }
 
 func respondToGetImage(w http.ResponseWriter, r *http.Request) {
@@ -1279,7 +1292,7 @@ func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 }
 
 /*func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
-	// TODO REPLACE WITH NEW STUFF
+	// TODO REPLACE WITH NEW FILE UPLOAD
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
 	if len(split) != 4 {
@@ -1304,7 +1317,6 @@ func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 		for i := len(room.Messages) - 1; i >= 0; i-- {
 			if room.Messages[i].AttachmentPath != "" {
 				removePath := room.Messages[i].AttachmentPath
-				// Maybe insecure TODO check security
 				if strings.HasPrefix(removePath, "images") {
 					err := os.Remove(removePath)
 					if err != nil {
@@ -1405,7 +1417,11 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO check if in group
+	if !isUserInGroup(message.SenderID, strconv.FormatInt(groupID, 10)) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
 
 	query = "INSERT INTO messages (sender_id, group_id, text, attachment_path, timestamp) VALUES (?, ?, ?, ?, ?)"
 	_, err = sqlDB.Exec(query, (*claims)["id"], groupID, message.Text, "", time.Now())
