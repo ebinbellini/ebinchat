@@ -9,9 +9,12 @@
 	<meta name="author" content="Ebin Bellini - ebinbellini@airmail.cc" />
 	<title>Echeveria Chat</title>
 
-	<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
-	<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
-	<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+	<link rel="apple-touch-icon" sizes="180x180"
+		href="/icons/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32"
+		href="/icons/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16"
+		href="/icons/favicon-16x16.png">
 	<link rel="manifest" href="/icons/site.webmanifest">
 	<link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#5a9271">
 	<link rel="shortcut icon" href="/icons/favicon.ico">
@@ -22,7 +25,8 @@
 	<meta name="application-name" content="Echeveria" />
 	<meta name="msapplication-TileColor" content="#5a9271" />
 	<meta name="theme-color" content="#5a9271" />
-	<meta name="twitter:card" content="Echeveria, the nicest messaging platform" />
+	<meta name="twitter:card"
+		content="Echeveria, the nicest messaging platform" />
 
 	<link href="/main.css" rel="stylesheet" />
 	<link href="/field.css" rel="stylesheet" />
@@ -39,27 +43,35 @@
 		<form id="login" onsubmit="return submit_login_form()">
 			<h2 style="padding-bottom: 16px;">Log in</h2>
 			<div class="form-element form-input">
-				<input id="login-email" class="form-element-field" placeholder="Type your email, bucko" type="input"
+				<input id="login-email" class="form-element-field"
+					placeholder="Type your email, bucko" type="input"
 					required />
 				<div class="form-element-bar"></div>
-				<label class="form-element-label" for="login-email">Email</label>
+				<label class="form-element-label"
+					for="login-email">Email</label>
 			</div>
 
 			<div class="form-element form-input">
-				<input id="login-password" class="form-element-field" placeholder="Any format you want" type="password"
+				<input id="login-password" class="form-element-field"
+					placeholder="Any format you want" type="password"
 					required />
 				<div class="form-element-bar"></div>
-				<label class="form-element-label" for="login-password">Password</label>
+				<label class="form-element-label"
+					for="login-password">Password</label>
 			</div>
 
 			<div class="center-content">
-				<div class="button ripple" onclick="submit_login_form()" tabindex=0>Submit</div>
+				<div class="button ripple" onclick="submit_login_form()"
+					tabindex=0>Submit</div>
 			</div>
-			<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
+			<input type="submit"
+				style="position: absolute; left: -9999px; width: 1px; height: 1px;"
+				tabindex="-1" />
 			<br clear="both" />
 			<hr class="divider" style="margin-bottom: 12px; margin-top: -4px" />
 			Don't have an account?
-			<b class="button-flat ripple" style="float: right; margin-top: -6px; padding: 0 14px;"
+			<b class="button-flat ripple"
+				style="float: right; margin-top: -6px; padding: 0 14px;"
 				onclick="display_other_form()">SIGN UP</b>
 			<br style="margin-bottom: 8px " clear="both" />
 			<a href="/help">Help</a>
@@ -70,32 +82,41 @@
 		<form id="signup" onsubmit="return submit_signup_form()">
 			<h2 style="padding-top: 20px; padding-bottom: 16px;">Sign up</h2>
 			<div class="form-element form-input">
-				<input id="email" class="form-element-field" placeholder="Type your email, bucko" type="email"
+				<input id="email" class="form-element-field"
+					placeholder="Type your email, bucko" type="email"
 					required />
 				<div class="form-element-bar"></div>
 				<label class="form-element-label" for="email">Email</label>
 			</div>
 
 			<div class="form-element form-input">
-				<input id="password" class="form-element-field" placeholder="Any format you want" type="password"
+				<input id="password" class="form-element-field"
+					placeholder="Any format you want" type="password"
 					required />
 				<div class="form-element-bar"></div>
-				<label class="form-element-label" for="password">Password</label>
+				<label class="form-element-label"
+					for="password">Password</label>
 			</div>
 
 			<div class="form-element form-input">
-				<input id="display-name" class="form-element-field" placeholder="そらまめ" type="input" required />
+				<input id="display-name" class="form-element-field"
+					placeholder="そらまめ" type="input" required />
 				<div class="form-element-bar"></div>
-				<label class="form-element-label" for="display-name">Display name</label>
+				<label class="form-element-label" for="display-name">Display
+					name</label>
 			</div>
 			<div class="center-content">
-				<div class="button ripple" onclick="submit_signup_form()" tabindex=0>Submit</div>
+				<div class="button ripple" onclick="submit_signup_form()"
+					tabindex=0>Submit</div>
 			</div>
-			<input type="submit" style="position: absolute; left: -9999px; width: 1px; height: 1px;" tabindex="-1" />
+			<input type="submit"
+				style="position: absolute; left: -9999px; width: 1px; height: 1px;"
+				tabindex="-1" />
 			<br clear="all" />
 			<hr class="divider" style="margin-bottom: 12px; margin-top: -4px" />
 			Already have an account?
-			<b class="button-flat ripple" style="float: right; margin-top: -6px;  padding: 0 14px;"
+			<b class="button-flat ripple"
+				style="float: right; margin-top: -6px;  padding: 0 14px;"
 				onclick="display_other_form()">LOG IN</b>
 			<br style="margin-top: 6px;" clear="both" />
 			<a href="/help">Help</a>
@@ -110,107 +131,130 @@
 				<img class="title-logo" src="icons/ELK tjocc.png" />
 				<div class="title">Echeveria</div>
 				<div class="my-profile-pic"></div>
-				<div class="search-bar" id="contact-search">
-					<input type="text" placeholder="Search Contacts">
-					<svg class="input-icon" xmlns:svg="http://www.w3.org/2000/svg"
-						xmlns="http://www.w3.org/2000/svg"
-						xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" version="1.1"
-						viewBox="0 0 6.35 6.35" height="24" width="24">
-						<path
-							d="M 4.2336235,2.2489583 A 1.9846654,1.9846656 0 0 1 2.249088,4.233624 1.9846654,1.9846656 0 0 1 0.26429273,2.2492181 1.9846654,1.9846656 0 0 1 2.2485684,0.26429276 1.9846654,1.9846656 0 0 1 4.2336234,2.2484387"
-							sodipodi:arc-type="arc" sodipodi:open="true" sodipodi:end="6.2829235" sodipodi:start="0"
-							sodipodi:ry="1.9846656" sodipodi:rx="1.9846654" sodipodi:cy="2.2489583"
-							sodipodi:cx="2.2489581" sodipodi:type="arc"
-							style="fill:none;fill-opacity:1;stroke:#484848;stroke-width:0.528585;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-						<path d="M 3.6155998,3.6149312 6.1739834,6.1878656 Z"
-							style="fill:none;stroke:#484848;stroke-width:0.496894;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-					</svg>
-					<div class="cancel">
-						<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1"
-							viewBox="0 0 10 10" height="18" width="18">
-							<path d="M 0.5,0.5 9.5,9.5"
-								style="fill:none;stroke:#5a9271;stroke-width:1.4;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-							<path
-								style="fill:none;stroke:#5a9271;stroke-width:1.4;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-								d="M 9.5,0.5 0.5,9.5" />
+
+				<section id="action-center">
+					<div class="action ripple" id="request">
+						<svg class="action-icon"
+							xmlns:svg="http://www.w3.org/2000/svg"
+							xmlns="http://www.w3.org/2000/svg" version="1.1"
+							viewBox="0 0 12.7 12.7" height="48" width="48">
+							<ellipse ry="2.3099384" rx="2.3099387"
+								cy="3.5057294" cx="5.1187129" id="path837"
+								style="fill:none;stroke:#484848;stroke-width:0.8;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
+							<rect y="5.58918" x="8.4240007" height="0.26568866"
+								width="3.373723" id="rect841"
+								style="fill:none;stroke:#484848;stroke-width:0.528061;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+							<rect transform="rotate(90)"
+								style="fill:none;stroke:#484848;stroke-width:0.528061;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+								id="rect841-1" width="3.373723"
+								height="0.26568866" x="4.0772753"
+								y="-10.267331" />
+							<path sodipodi:nodetypes="csc" id="path860"
+								d="m 1.6536459,10.752631 c 0,0 0.067374,-3.1040701 3.6143972,-3.1110368 3.4745462,-0.00683 3.5199032,3.1307278 3.5199032,3.1307278"
+								style="fill:none;stroke:#484848;stroke-width:0.730368;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
 						</svg>
+						<div class="action-name">
+							Request
+						</div>
+						<!-- TODO REQUEST FRIEND FEATURE GET A RANDOM CHATTING COMPANION -->
 					</div>
-				</div>
+
+					<div class="action ripple" id="new-group">
+						<svg class="action-icon"
+							xmlns:svg="http://www.w3.org/2000/svg"
+							xmlns="http://www.w3.org/2000/svg" version="1.1"
+							viewBox="0 0 12.7 12.7" height="48" width="48">
+							<ellipse
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
+								id="path837" cx="3.1698377" cy="7.3222218"
+								rx="1.5068451" ry="1.4593457" />
+							<path
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+								d="m 0.90946604,11.900584 c 0,0 0.04395,-1.9610532 2.35778406,-1.9654546 2.2665549,-0.00431 2.2961427,1.9778946 2.2961427,1.9778946"
+								id="path860" sodipodi:nodetypes="csc" />
+							<ellipse ry="1.4593457" rx="1.5068451"
+								cy="5.5298524" cx="9.8316441" id="path837-3"
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
+							<path sodipodi:nodetypes="csc" id="path860-3"
+								d="m 7.5712717,10.108214 c 0,0 0.04395,-1.9610527 2.3577844,-1.9654543 2.2665549,-0.00431 2.2961429,1.9778943 2.2961429,1.9778943"
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+							<ellipse ry="1.4593457" rx="1.5068451"
+								cy="2.8603952" cx="5.2014346" id="path837-8"
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
+							<path sodipodi:nodetypes="csc" id="path860-6"
+								d="m 4.6655796,5.6433702 c 0,0 0.1148206,-0.1420423 0.6332679,-0.1700674 2.2632549,-0.1223422 2.2961428,1.9778945 2.2961428,1.9778945"
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+						</svg>
+						<div class="action-name">
+							New group
+						</div>
+					</div>
+
+					<div class="action ripple" id="invitations">
+						<svg class="action-icon"
+							xmlns:svg="http://www.w3.org/2000/svg"
+							xmlns="http://www.w3.org/2000/svg" version="1.1"
+							viewBox="0 0 12.7 12.7" height="48" width="48">
+							<ellipse ry="1.4593457" rx="1.5068451" cy="4.121819"
+								cx="-3.7183938" id="path837-8"
+								style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
+								transform="scale(-1,1)" />
+							<path
+								style="fill:none;stroke:#484848;stroke-width:0.787186;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+								d="m 4.24877,7.5916772 c 0,0 -0.3228752,-0.015687 -0.6671007,-0.015035 -2.74609297,0.0052 -2.78222223,2.3118536 -2.78222223,2.3118536"
+								id="path860-6" sodipodi:nodetypes="csc" />
+							<rect transform="scale(-1)" y="-11.041573"
+								x="-11.910198" height="4.5101738"
+								width="6.9155989" id="rect2393"
+								style="fill:none;fill-opacity:1;stroke:#484848;stroke-width:0.661001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke" />
+							<path id="path2403"
+								d="M 4.9945993,6.5313988 8.4022858,8.6695551 11.910198,6.5313988"
+								style="fill:none;stroke:#484848;stroke-width:0.765;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none" />
+						</svg>
+						<div class="action-name">
+							Invitations
+						</div>
+					</div>
+				</section>
+
 			</div>
 		</header>
 
 		<section id="content">
-			<section id="action-center">
-				<div class="action ripple" id="request">
-					<svg class="action-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
-						version="1.1" viewBox="0 0 12.7 12.7" height="48" width="48">
-						<ellipse ry="2.3099384" rx="2.3099387" cy="3.5057294" cx="5.1187129" id="path837"
-							style="fill:none;stroke:#484848;stroke-width:0.8;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
-						<rect y="5.58918" x="8.4240007" height="0.26568866" width="3.373723" id="rect841"
-							style="fill:none;stroke:#484848;stroke-width:0.528061;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
-						<rect transform="rotate(90)"
-							style="fill:none;stroke:#484848;stroke-width:0.528061;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-							id="rect841-1" width="3.373723" height="0.26568866" x="4.0772753" y="-10.267331" />
-						<path sodipodi:nodetypes="csc" id="path860"
-							d="m 1.6536459,10.752631 c 0,0 0.067374,-3.1040701 3.6143972,-3.1110368 3.4745462,-0.00683 3.5199032,3.1307278 3.5199032,3.1307278"
-							style="fill:none;stroke:#484848;stroke-width:0.730368;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-					</svg>
-					<div class="action-name">
-						Request
-					</div>
-					<!-- TODO REQUEST FRIEND FEATURE GET A RANDOM CHATTING COMPANION -->
-				</div>
-
-				<div class="action ripple" id="new-group">
-					<svg class="action-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
-						version="1.1" viewBox="0 0 12.7 12.7" height="48" width="48">
-						<ellipse
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
-							id="path837" cx="3.1698377" cy="7.3222218" rx="1.5068451" ry="1.4593457" />
-						<path
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-							d="m 0.90946604,11.900584 c 0,0 0.04395,-1.9610532 2.35778406,-1.9654546 2.2665549,-0.00431 2.2961427,1.9778946 2.2961427,1.9778946"
-							id="path860" sodipodi:nodetypes="csc" />
-						<ellipse ry="1.4593457" rx="1.5068451" cy="5.5298524" cx="9.8316441" id="path837-3"
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
-						<path sodipodi:nodetypes="csc" id="path860-3"
-							d="m 7.5712717,10.108214 c 0,0 0.04395,-1.9610527 2.3577844,-1.9654543 2.2665549,-0.00431 2.2961429,1.9778943 2.2961429,1.9778943"
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-						<ellipse ry="1.4593457" rx="1.5068451" cy="2.8603952" cx="5.2014346" id="path837-8"
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
-						<path sodipodi:nodetypes="csc" id="path860-6"
-							d="m 4.6655796,5.6433702 c 0,0 0.1148206,-0.1420423 0.6332679,-0.1700674 2.2632549,-0.1223422 2.2961428,1.9778945 2.2961428,1.9778945"
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-					</svg>
-					<div class="action-name">
-						New group
-					</div>
-				</div>
-
-				<div class="action ripple" id="invitations">
-					<svg class="action-icon" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
-						version="1.1" viewBox="0 0 12.7 12.7" height="48" width="48">
-						<ellipse ry="1.4593457" rx="1.5068451" cy="4.121819" cx="-3.7183938" id="path837-8"
-							style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
-							transform="scale(-1,1)" />
-						<path
-							style="fill:none;stroke:#484848;stroke-width:0.787186;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-							d="m 4.24877,7.5916772 c 0,0 -0.3228752,-0.015687 -0.6671007,-0.015035 -2.74609297,0.0052 -2.78222223,2.3118536 -2.78222223,2.3118536"
-							id="path860-6" sodipodi:nodetypes="csc" />
-						<rect transform="scale(-1)" y="-11.041573" x="-11.910198" height="4.5101738" width="6.9155989"
-							id="rect2393"
-							style="fill:none;fill-opacity:1;stroke:#484848;stroke-width:0.661001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke" />
-						<path id="path2403" d="M 4.9945993,6.5313988 8.4022858,8.6695551 11.910198,6.5313988"
-							style="fill:none;stroke:#484848;stroke-width:0.765;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none" />
-					</svg>
-					<div class="action-name">
-						Invitations
-					</div>
-				</div>
-			</section>
 
 			<div class="subtitle">
 				Contacts
+			</div>
+
+			<div class="input-container" id="contact-search">
+				<input type="text" placeholder="Search Contacts">
+				<svg class="input-icon" xmlns:svg="http://www.w3.org/2000/svg"
+					xmlns="http://www.w3.org/2000/svg"
+					xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+					version="1.1" viewBox="0 0 6.35 6.35" height="24"
+					width="24">
+					<path
+						d="M 4.2336235,2.2489583 A 1.9846654,1.9846656 0 0 1 2.249088,4.233624 1.9846654,1.9846656 0 0 1 0.26429273,2.2492181 1.9846654,1.9846656 0 0 1 2.2485684,0.26429276 1.9846654,1.9846656 0 0 1 4.2336234,2.2484387"
+						sodipodi:arc-type="arc" sodipodi:open="true"
+						sodipodi:end="6.2829235" sodipodi:start="0"
+						sodipodi:ry="1.9846656" sodipodi:rx="1.9846654"
+						sodipodi:cy="2.2489583" sodipodi:cx="2.2489581"
+						sodipodi:type="arc"
+						style="fill:none;fill-opacity:1;stroke:#484848;stroke-width:0.528585;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+					<path d="M 3.6155998,3.6149312 6.1739834,6.1878656 Z"
+						style="fill:none;stroke:#484848;stroke-width:0.496894;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+				</svg>
+				<div class="cancel">
+					<svg xmlns:svg="http://www.w3.org/2000/svg"
+						xmlns="http://www.w3.org/2000/svg" version="1.1"
+						viewBox="0 0 10 10" height="18" width="18">
+						<path d="M 0.5,0.5 9.5,9.5"
+							style="fill:none;stroke:#5a9271;stroke-width:1.4;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+						<path
+							style="fill:none;stroke:#5a9271;stroke-width:1.4;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+							d="M 9.5,0.5 0.5,9.5" />
+					</svg>
+				</div>
 			</div>
 
 			<!-- TODO välja sortering -->

@@ -11,7 +11,7 @@ let friend_requests = [];
 
 let history = [];
 let history_index = 0;
-let last_message_time = 1337;
+let last_message_id = 0;
 
 /*const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
@@ -64,8 +64,7 @@ function remove_cookie_banner() {
 	cookies_ok = true;
 	setTimeout(() => {
 		banner.remove();
-		date.setTime(date.getTime() + (31*24*60*60*1000));
-		document.cookie = `auth=${value};expires=${date};path=/`;
+		document.cookie = `cookies_allowed=true`;
 	}, 300);
 }
 
@@ -121,8 +120,8 @@ function click_form_input() {
 }
 
 function set_auth_cookie(value) {
-	var date = new Date();
-	date.setTime(date.getTime() + (31*24*60*60*1000));
+	let date = new Date();
+	date.setTime(date.getTime() + (31 * 24 * 60 * 60 * 1000));
 	document.cookie = `auth=${value};expires=${date};path=/`;
 }
 
@@ -373,7 +372,7 @@ function create_contact_button(data) {
 
 function open_conversation(group_data) {
 	return event => {
-		console.log(group_data);
+		close_all_big_windows();
 
 		const big_window = create_big_window(group_data.groupName);
 
@@ -383,9 +382,13 @@ function open_conversation(group_data) {
 
 		// Input to type messages
 		const message_input = create_a_textarea();
-		message_input.id = "message-input";
 		message_input.addEventListener("keydown", message_input_keydown(group_data));
-		content.appendChild(message_input);
+
+		// Container for input to type messages
+		const input_container = document.createElement("div");
+		input_container.id = "message-input";
+		input_container.appendChild(message_input);
+		content.appendChild(input_container);
 
 		// Enable clicking the send button to send messages 
 		const send_button = message_input.getElementsByClassName("send-button")[0];
@@ -400,7 +403,7 @@ function open_conversation(group_data) {
 		big_window.appendChild(content);
 
 		display_previous_messages(group_data);
-		await_messages_from_group(group_data);
+		await_messages_from_group(group_data, message_container);
 	};
 }
 
@@ -408,9 +411,8 @@ function display_previous_messages(group_data) {
 	get("/messages/", group_data.groupID).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
-				//console.log(atob(text.split("\"").join("")));
 				const messages = base64_json_to_object(text);
-				console.log(messages);
+
 				for (const message_data of messages) {
 					const msg_element = create_message_element(message_data);
 					insert_message(msg_element);
@@ -436,28 +438,32 @@ function insert_message(message_element) {
 	) return;
 
 	// Update last message time
-	if (insert_msg_id > last_message_time)
-		last_message_time = insert_msg_id;
+	if (insert_msg_id > last_message_id)
+		last_message_id = insert_msg_id;
 
-	// Sort with the messages newest first
+	// Sort with the newest messages first
 	const sorted = nodes.sort((a, b) => {
 		const a_t = Date.parse(a.getAttribute("timestamp"));
 		const b_t = Date.parse(b.getAttribute("timestamp"));
 		return b_t - a_t;
 	});
 
-	// Look for older  messages than this
+	/* 	Below: Insert the messages in reverse order
+		because the message container is reversed
+	*/
+
+	// Look for older messages than this
 	for (const node of sorted) {
 		const this_timestamp = Date.parse(node.getAttribute("timestamp"));
 
-		if (insert_timestamp < this_timestamp ) {
-			// Found an older message. Insert after it.
-			message_list.insertBefore(message_element, node.nextElementSibling);
+		if (insert_timestamp > this_timestamp) {
+			// Found an older message. Insert before it.
+			message_list.insertBefore(message_element, node);
 			return;
 		}
 	}
 
-	// This is the latest message. Insert it at the end of the message list.
+	// This is the oldest message. Insert it at the end of the message list.
 	message_list.appendChild(message_element);
 }
 
@@ -475,27 +481,37 @@ function create_message_element(message_data) {
 
 	const message = document.createElement("div");
 	message.classList.add("message");
-	message.innerText = message_data.text;
+	// Change to correct encoding
+	message.innerText = window.decodeURIComponent(window.escape(message_data.text));
 	message_container.appendChild(message);
 
 	return message_container;
 }
 
-function await_messages_from_group(group_data) {
-	get("/awaitmessages/", last_message_time + "/" + group_data.groupID).then(resp => {
-		console.log(resp);
+function await_messages_from_group(group_data, message_container) {
+	// Stop awaiting messages when the chat is closed
+	if (message_container.parentNode == null) {
+		return
+	}
+
+	get("/awaitmessages/", last_message_id + "/" + group_data.groupID).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
 				const messages = base64_json_to_object(text);
-				console.log(messages.length, " new messages");
 
 				for (const message_data of messages) {
 					const msg_element = create_message_element(message_data);
 					insert_message(msg_element);
 				}
-				await_messages_from_group(group_data);
+				// Await more messages
+				await_messages_from_group(group_data, message_container);
 			} else {
-				display_snackbar(text);
+				if (text == "Timeout") {
+					// Await more messages
+					await_messages_from_group(group_data, message_container);
+				} else {
+					display_snackbar(text);
+				}
 			}
 		});
 	});
@@ -1180,7 +1196,7 @@ function remove_bottom_sheet(sheet) {
 function create_a_search_bar(purpose, icon) {
 	// Create search bar element
 	const search_bar = document.createElement("div");
-	search_bar.classList.add("search-bar");
+	search_bar.classList.add("input-container");
 
 	// Add content to search bar
 	search_bar.innerHTML = `<input type="text" placeholder="${purpose}">
@@ -1219,7 +1235,7 @@ function create_a_search_bar(purpose, icon) {
 function create_a_textarea() {
 	// Create search bar element
 	const container = document.createElement("div");
-	container.classList.add("search-bar");
+	container.classList.add("input-container");
 
 	// Add content to search bar
 	container.innerHTML = `<textarea placeholder="Type a message"></textarea>
@@ -1229,9 +1245,18 @@ function create_a_textarea() {
 	const textarea = container.children[0];
 
 	textarea.addEventListener("input", event => {
-		textarea.style.height = 'auto';
-		const height = Math.min(textarea.scrollHeight, window.innerHeight / 2);
-		textarea.style.height = height + "px";
+		window.setTimeout(() => {
+			/*  Without this the size only changes by one lineheight per activation
+				and behaves weird in other ways. */
+			textarea.style.height = 'auto';
+			const lines = textarea.value.split("\n").length;
+			const line_height = 20;
+			const text_height = 7 + lines * line_height;
+			// Fit text but take up at most half of the screen
+			const height = Math.min(text_height, window.innerHeight / 2);
+			textarea.style.height = height + "px";
+			//console.log(height);
+		}, 50);
 	});
 
 	// Assumes that the textarea is inserted quickly

@@ -55,7 +55,7 @@ main.obscured {
 }
 
 main header {
-    height: 142px;
+    height: 170px;
     position: sticky;
     top: 0;
     background: linear-gradient(45deg, #56856a, #f2f2de);
@@ -65,20 +65,10 @@ main header {
     width: 8px;
 }
 
-/* Track */
-
-::-webkit-scrollbar-track {
-    background: #00000010;
-}
-
-/* Handle */
-
 ::-webkit-scrollbar-thumb {
     background: #00000044;
     border-radius: 4px;
 }
-
-/* Handle on hover */
 
 ::-webkit-scrollbar-thumb:hover {
     background: #00000066;
@@ -87,12 +77,12 @@ main header {
 #content {
     z-index: 8;
     position: absolute;
-    top: 122px;
+    top: 154px;
     width: 100%;
-    min-height: calc(100% - 122px);
+    min-height: calc(100% - 154px);
     border-radius: 16px 16px 0 0;
     background: linear-gradient(90deg, #f1f1f1, #e0e0e0);
-    box-shadow: 0 3px 30px 3px rgba(0, 0, 0, 0.08), 0 4px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0 20px 3px rgba(0, 0, 0, 0.08), 0 0 30px rgba(0, 0, 0, 0.15);
 }
 
 a {
@@ -366,7 +356,7 @@ label {
     font-weight: 700;
     font-size: 36px;
     margin: 0 16px -4px 16px;
-    text-shadow: -2px -2px 2px #e0e6d130, 2px 2px 2px #6d957b80;
+    text-shadow: -2px 0px 2px #3e3f3e5e;
     padding-top: 12px;
 }
 
@@ -407,17 +397,18 @@ label {
     background: #48484820;
 }
 
-header .search-bar input, header .search-bar textarea {
+header .input-container input, header .input-container textarea {
     box-shadow: 0 2px 4px -1px rgba(0, 0, 0, .12), 0 4px 5px 0 rgba(0, 0, 0, .08), 0 1px 10px 0 rgba(0, 0, 0, .06);
 }
 
-.search-bar {
+.input-container {
     margin: 10px 16px;
     width: calc(100% - 32px);
     position: relative;
 }
 
-.search-bar input, .search-bar textarea {
+.input-container input, .input-container textarea {
+    line-height: 20px;
     width: 100%;
     padding: 6px 8px 6px 30px;
     margin: 4px 0;
@@ -430,12 +421,12 @@ header .search-bar input, header .search-bar textarea {
     transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-bar input::placeholder, .search-bar textarea::placeholder {
+.input-container input::placeholder, .input-container textarea::placeholder {
     color: #888;
     transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-bar .input-icon {
+.input-container .input-icon {
     position: absolute;
     left: 4px;
     top: 0;
@@ -445,17 +436,17 @@ header .search-bar input, header .search-bar textarea {
     transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-bar .input-icon path {
+.input-container .input-icon path {
     transition: 200ms;
 }
 
-.search-bar input:focus, .search-bar textarea:focus {
+.input-container input:focus, .input-container textarea:focus {
     display: inline-block;
     color: #595959;
     padding-left: 36px;
 }
 
-.search-bar .cancel {
+.input-container .cancel {
     position: absolute;
     right: -4px;
     top: 0;
@@ -468,22 +459,22 @@ header .search-bar input, header .search-bar textarea {
     transition: 350ms cubic-bezier(0.3, 1.1, 0.7, 1);
 }
 
-.search-bar .cancel svg {
+.input-container .cancel svg {
     margin: 10px 0;
 }
 
-.search-bar input:focus~.cancel, .search-bar textarea:focus~.cancel {
+.input-container input:focus~.cancel, .input-container textarea:focus~.cancel {
     opacity: 1;
     transform: scale(0.7);
     cursor: pointer;
 }
 
-.search-bar input:focus+.input-icon, .search-bar textarea:focus+.input-icon {
+.input-container input:focus+.input-icon, .input-container textarea:focus+.input-icon {
     transform: scale(0.70);
     left: 7px;
 }
 
-.search-bar input:focus::placeholder, .search-bar textarea:focus::placeholder {
+.input-container input:focus::placeholder, .input-container textarea:focus::placeholder {
     color: rgba(0, 0, 0, 0);
 }
 
@@ -612,7 +603,8 @@ header .search-bar input, header .search-bar textarea {
 }
 
 #action-center {
-    padding: 8px;
+    width: calc(100% - 16px);
+    margin: 8px auto 0 auto;
     display: flex;
 }
 
@@ -625,7 +617,7 @@ header .search-bar input, header .search-bar textarea {
     height: 56px;
     padding: 8px;
     border-radius: 12px;
-    background: #fefefe;
+    background: #f2f4eb;
     margin: 8px;
     transition: 300ms;
     cursor: pointer;
@@ -930,9 +922,13 @@ header .search-bar input, header .search-bar textarea {
     padding-left: 56px;
     color: #212121;
     box-sizing: border-box;
-    text-shadow: -2px -2px 2px #e0e6d130, 2px 2px 2px #6d957b80;
-    background: linear-gradient(45deg, #f2f2de, #76a68a);
-    box-shadow: 0 3px 30px 3px rgba(0, 0, 0, 0.08), 0 4px 40px rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.big-window #message-input {
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    margin: 0;
+    width: 100%;
 }
 
 .big-window #message-input textarea {
@@ -951,7 +947,7 @@ header .search-bar input, header .search-bar textarea {
 }
 
 .big-window #message-input .input-icon {
-    top: 8px;
+    top: 5px;
     left: 6px;
     bottom: unset;
     margin: 0;
@@ -974,7 +970,7 @@ header .search-bar input, header .search-bar textarea {
 
 .big-window .send-button {
     position: absolute;
-    top: -4px;
+    top: -7px;
     right: 0;
     padding: 8px;
     cursor: pointer;
@@ -991,9 +987,11 @@ header .search-bar input, header .search-bar textarea {
 }
 
 .big-window .messages {
-    padding: 12px 8px 12px 8px;
+    padding: 12px 8px 8px 8px;
     overflow: auto;
     scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column-reverse;
 }
 
 /*  TODO put the messages toghether if time difference is
@@ -1001,7 +999,8 @@ header .search-bar input, header .search-bar textarea {
 
 .big-window .messages .message-container {
     width: 100%;
-    padding: 8px 4px;
+    padding: 2px;
+    box-sizing: border-box;
     clear: both;
 }
 
@@ -1010,13 +1009,7 @@ header .search-bar input, header .search-bar textarea {
     background: #ffffffba;
     border-radius: 8px;
     float: left;
-    /* 3D lole */
-    /*
-        border-bottom: 3px solid #0000003D;
-        
-        #547561
-    */
-    box-shadow: 0 3px #bdbdbd;
+    box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .12), 0 2px 2px 0 rgba(0, 0, 0, .08), 0 1px 5px 0 rgba(0, 0, 0, .06);
     width: fit-content;
 }
 
@@ -1024,7 +1017,7 @@ header .search-bar input, header .search-bar textarea {
     float: right;
     background: #6f9a7f;
     color: #fafafa;
-    box-shadow: 0 3px #547561;
+    box-shadow: 0 3px 1px -2px rgba(50, 60, 51, 0.12), 0 2px 2px 0 rgba(70, 88, 73, 0.15), 0 1px 5px 0 rgba(72, 90, 70, 0.14);
 }
 
 @media screen and (max-width: 500px) {
@@ -1055,5 +1048,3 @@ header .search-bar input, header .search-bar textarea {
         display: none;
     }
 }
-
-/* TODO IF SCREEN IS BIG ENOUGH SHOW PARTICIPANTS TO THE RIGHT */

@@ -53,7 +53,7 @@ async function respond(event) {
 				});
 			}
 			// Cache and respond with fetched response
-			var response_to_be_cached = fetched_response.clone();
+			let response_to_be_cached = fetched_response.clone();
 			let opened = await caches.open(CACHE)
 			opened.put(event.request, response_to_be_cached);
 		}

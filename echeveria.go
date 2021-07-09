@@ -7,10 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	webpush "github.com/SherClockHolmes/webpush-go"
-	"github.com/dgrijalva/jwt-go"
-	_ "github.com/go-sql-driver/mysql"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"net/url"
@@ -19,6 +15,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/dgrijalva/jwt-go"
+	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Only used for implementing trait for serveHTTP
@@ -37,13 +38,13 @@ type Message struct {
 
 // Listener Client waiting for when new data is available
 type Listener struct {
-	Writer      http.ResponseWriter
-	Request     *http.Request
-	Name        string
-	UserID      int64
-	Used        bool
-	LastMsgTime time.Time
-	Expires     time.Time
+	Writer    http.ResponseWriter
+	Request   *http.Request
+	Name      string
+	UserID    int64
+	Used      bool
+	LastMsgID int64
+	Expires   time.Time
 }
 
 // ListenerGroup All listeners in one group
@@ -156,7 +157,9 @@ func generateHMACPrivateKey() {
 func openMySQLDatabase() {
 	// Password for test database. Won't work on the real server.
 	// benim:liksomvadeupposv@localhost:3306/echeveria
-	db, err := sql.Open("mysql", "root:thispasswordisprivate@(127.0.0.1:3306)/echeveria?parseTime=true")
+
+	// TODO put back this: root:thispasswordisprivate@(127.0.0.1:3306)/echeveria?parseTime=true
+	db, err := sql.Open("mysql", "benim:liksomvadeupposv@(127.0.0.1:3306)/echeveria?parseTime=true")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -250,17 +253,13 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Calculate timestamp in milliseconds at the moment of sending the request
-	lastMsgTimeStamp := split[3]
-	ms, err := strconv.ParseInt(lastMsgTimeStamp, 10, 64)
+	lastMsgIDString := split[3]
+	lastMsgID, err := strconv.ParseInt(lastMsgIDString, 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 		return
 	}
-
-	// Convert timestamp in milliseconds to unix timestamp
-	lastMsgUnix := time.Unix(0, 0)
-	lastMsgUnix = lastMsgUnix.Add(time.Duration(ms) * time.Millisecond)
 
 	// Calculate expiry timestamp
 	expires := time.Now().Add(listenerLifetime)
@@ -274,12 +273,12 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	}
 
 	listener := &Listener{
-		Writer:      w,
-		Request:     r,
-		UserID:      userID,
-		Used:        false,
-		LastMsgTime: lastMsgUnix,
-		Expires:     expires,
+		Writer:    w,
+		Request:   r,
+		UserID:    userID,
+		Used:      false,
+		LastMsgID: lastMsgID,
+		Expires:   expires,
 	}
 
 	// ID of the group to listen to
@@ -293,8 +292,7 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	lGroup.Listeners = append(lGroup.Listeners, listener)
 
 	for !listener.Used && listener.Expires.After(time.Now()) {
-		// TODO CHANGE TO 100
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	cleanupListeners(lGroup)
 }
@@ -515,7 +513,6 @@ func respondToFetchFriendRequests(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Println("failed to validate")
 		return
 	}
 
@@ -577,7 +574,6 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Println("failed to validate")
 		return
 	}
 
@@ -694,7 +690,6 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Println("failed to validate")
 		return
 	}
 
@@ -727,10 +722,12 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 		row := sqlDB.QueryRow(`SELECT id, group_name, image, is_direct,
 			last_message, last_event_time, created_at
 			FROM chat_groups WHERE id=?`, groupID)
+
 		gd := GroupData{}
-		var groupName sql.NullString
+		groupName := sql.NullString{}
+
 		err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
-			&gd.LastMessage, &gd.CreatedAt, &gd.LastEventTime)
+			&gd.LastMessage, &gd.LastEventTime, &gd.CreatedAt)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintln(w, err)
@@ -790,7 +787,6 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Println("failed to validate")
 		return
 	}
 
@@ -891,8 +887,6 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println(chatGroupID)
-
 	// Get ID of chat creator
 	myID, err := strconv.ParseInt((*claims)["id"].(string), 10, 64)
 	if err != nil {
@@ -967,7 +961,6 @@ func respondToSearchUsers(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Println("failed to validate")
 		return
 	}
 
@@ -1019,7 +1012,6 @@ func respondToProfilePics(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, fp)
 	} else {
 		if os.IsNotExist(err) {
-			fmt.Println("HITTADES INTE")
 			fp = filepath.Join("profilepics", "default.png")
 			http.ServeFile(w, r, fp)
 		} else {
@@ -1200,7 +1192,6 @@ func indexOf(slice []*Listener, elm *Listener) int {
 	return -1
 }
 
-// TODO
 func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
@@ -1434,10 +1425,8 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func notifyListeners(message Message) {
-	fmt.Println(message.GroupID, "のパーティーで新しいメッセージが", message.SenderID, "から届いた")
-	lGroup, ok := listenergroups[message.GroupID]
+	_, ok := listenergroups[message.GroupID]
 	if ok {
-		fmt.Println(message.GroupID, "のパーティーには", len(lGroup.Listeners), "つリスナーがあります")
 		handleListeners(message)
 	}
 
@@ -1450,8 +1439,8 @@ func handleListeners(message Message) {
 		if !listener.Used && listener.Expires.After(time.Now()) {
 			// TODO USE MESSAGE ID iNSTEAd of timestamp MAYBE
 			query := `SELECT id, sender_id, group_id, text, attachment_path, timestamp
-				FROM messages WHERE group_id=? AND timestamp>=?`
-			rows, err := sqlDB.Query(query, message.GroupID, listener.LastMsgTime)
+				FROM messages WHERE group_id=? AND id>=?`
+			rows, err := sqlDB.Query(query, message.GroupID, listener.LastMsgID)
 			if err != nil {
 				fmt.Print(err)
 				return
@@ -1470,7 +1459,6 @@ func handleListeners(message Message) {
 			}
 
 			if len(messages) == 0 {
-				fmt.Println("NO MESSAGES MATCHED")
 				return
 			}
 
@@ -1486,6 +1474,8 @@ func handleListeners(message Message) {
 }
 
 /*func sendNotifications(message Message) {
+	message.GroupID
+
 	for _, subscriber := range room.Subscribers {
 		// Don't send notification to the sender
 		//if subscriber.Name == message.SenderName {
@@ -1500,7 +1490,7 @@ func handleListeners(message Message) {
 		}
 		text, err := json.Marshal(notifContents)
 		if err != nil {
-			fmt.Fprintln(w, "おかしいなぁ このエラーが出てきた: "+err)
+			fmt.Println(err)
 		}
 
 		// Send Notification
@@ -1516,7 +1506,8 @@ func handleListeners(message Message) {
 			fmt.Println("通知を送信できませんでした", err)
 			return
 		}
-		fmt.Println("通知を送信できました　いいね！", resp.Status)
+		fmt.Println("通知を送信できました。いいね！", resp.Status)
 		defer resp.Body.Close()
 	}
-}*/
+}
+*/
