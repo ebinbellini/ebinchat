@@ -548,7 +548,7 @@ function send_message(input, group_data) {
 		if (resp.ok) {
 			input.value = "";
 		} else {
-			display_snackbar("Could not send message. " + text);
+			display_snackbar("Could not send message. " + resp.text);
 		}
 	});
 }

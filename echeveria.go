@@ -189,11 +189,11 @@ func openMySQLDatabase() {
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
 
-	// TODO MESSAGECOUNT
 	createTable("chat_groups", `id INT AUTO_INCREMENT,
 		group_name VARCHAR(60),
 		image TEXT,
 		is_direct BOOLEAN,
+		message_count INT,
 		last_message VARCHAR(60) NOT NULL,
 		last_event_time DATETIME,
 		created_at DATETIME,
@@ -502,6 +502,8 @@ func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, err)
 		return
 	}
+
+	// TODO push notification
 }
 
 func respondToFetchFriendRequests(w http.ResponseWriter, r *http.Request) {
@@ -542,13 +544,7 @@ func respondToFetchFriendRequests(w http.ResponseWriter, r *http.Request) {
 
 	profiles := []PublicUserInfo{}
 	for _, senderID := range senders {
-		row := sqlDB.QueryRow("SELECT name, image FROM users WHERE id=?", senderID)
-		var name string
-		var image string
-		err := row.Scan(&name, &image)
-		if err != nil {
-			fmt.Println(err)
-		}
+		name, image := getUserNameAndImage(senderID)
 		profiles = append(profiles, PublicUserInfo{
 			Name:  name,
 			Image: image,
@@ -563,6 +559,24 @@ func respondToFetchFriendRequests(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, err)
 	}
+}
+
+func getUserNameAndImage(userID int) (name string, image string) {
+	row := sqlDB.QueryRow("SELECT name, image FROM users WHERE id=?", userID)
+	err := row.Scan(&name, &image)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return
+}
+
+func getUserName(userID string) (name string) {
+	row := sqlDB.QueryRow("SELECT name FROM users WHERE id=?", userID)
+	err := row.Scan(&name)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return
 }
 
 func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
@@ -638,7 +652,7 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a chat
-	query = "INSERT INTO chat_groups (image, is_direct, last_message, last_event_time, created_at) VALUES (?, ?, ?, ?, ?)"
+	query = "INSERT INTO chat_groups (image, is_direct, message_count, last_message, last_event_time, created_at) VALUES (?, ?, 0, ?, ?, ?)"
 	result, err := sqlDB.Exec(query, "default.svg", true, "New friend!", time.Now(), time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -679,6 +693,8 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, err)
 		return
 	}
+
+	// TODO make the new contact appear in contact list without having to reload
 }
 
 func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
@@ -752,19 +768,7 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintln(w, err)
 				return
 			}
-
-			var name string
-			var image string
-
-			row2 := sqlDB.QueryRow("SELECT name, image FROM users WHERE id=?", id)
-			err = row2.Scan(&name, &image)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintln(w, err)
-				return
-			}
-			gd.GroupName = name
-			gd.ImageURL = image
+			gd.GroupName, gd.ImageURL = getUserNameAndImage(id)
 		}
 		groupDatas = append(groupDatas, gd)
 	}
@@ -826,15 +830,8 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 	// Fetch display-data of all these users
 	profiles := []PublicUserInfo{}
 	for _, id := range friendIDs {
-		row := sqlDB.QueryRow(`SELECT name, image FROM users WHERE id=?`, id)
 		pui := PublicUserInfo{}
-		err := row.Scan(&pui.Name, &pui.Image)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintln(w, err)
-			return
-		}
-
+		pui.Name, pui.Image = getUserNameAndImage(id)
 		profiles = append(profiles, pui)
 	}
 
@@ -875,7 +872,7 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a chat
-	query := "INSERT INTO chat_groups (group_name, image, is_direct, last_message, last_event_time, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+	query := "INSERT INTO chat_groups (group_name, image, is_direct, message_count, last_message, last_event_time, created_at) VALUES (?, ?, ?, 0, ?, ?, ?)"
 	result, err := sqlDB.Exec(query, groupData.GroupName, "default.svg", false, "New group, say hi!", time.Now(), time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -1431,6 +1428,32 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Increase message count
+	incr := "UPDATE chat_groups SET message_count = message_count + 1 WHERE id = ?"
+	_, err = sqlDB.Exec(incr, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Truncate the last message and say who it is from
+	name := getUserName(message.SenderID)
+	last_message := name + ": " + message.Text
+	if len(last_message) > 55 {
+		last_message = last_message[0:55] + "…"
+	}
+
+	// Update last_message field
+	lsms := "UPDATE chat_groups SET last_message = ? WHERE id = ?"
+	_, err = sqlDB.Exec(lsms, last_message, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		fmt.Println(err)
+		return
+	}
+
 	// TODO fix this
 	notifyListeners(message)
 
@@ -1453,7 +1476,6 @@ func handleListeners(message Message) {
 	for _, listener := range listenergroups[message.GroupID].Listeners {
 		// If not used and not expired
 		if !listener.Used && listener.Expires.After(time.Now()) {
-			// TODO USE MESSAGE ID iNSTEAd of timestamp MAYBE
 			query := `SELECT id, sender_id, group_id, text, attachment_path, timestamp
 				FROM messages WHERE group_id=? AND id>=?`
 			rows, err := sqlDB.Query(query, message.GroupID, listener.LastMsgID)
