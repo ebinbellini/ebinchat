@@ -558,19 +558,36 @@ function create_big_window(title) {
 	const big_window = document.createElement("div");
 	big_window.classList.add("big-window");
 
-	// Add close button to window
-	const close_button = document.createElement("div");
-	close_button.classList.add("close-button");
-	close_button.innerHTML = `<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 10 10" height="24" width="24">
-		<path style="fill:none;stroke:#212121;stroke-width:1.3678;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 0.48447042,0.4827066 9.5171087,9.5172934"/>
-		<path style="fill:none;stroke:#212121;stroke-width:1.3677;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 9.5156305,0.48273833 0.48436955,9.5173949" />
-	`;
-	close_button.addEventListener("click", close_all_big_windows);
-	big_window.appendChild(close_button);
-
 	// Add header
 	const header = document.createElement("header");
 	header.innerText = title;
+
+	// Add close button to header
+	const close_button = document.createElement("div");
+	close_button.classList.add("close-button");
+	close_button.innerHTML = `<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 10 10" height="24" width="24">
+		<path style="fill:none;fill-opacity:1;stroke:#212121;stroke-width:1.16947;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 1.1393294,1.1377215 8.8622351,8.8622932" id="path833" />
+		<path id="path833-8" d="M 8.8609713,1.1377486 1.1392431,8.86238" style="fill:none;fill-opacity:1;stroke:#212121;stroke-width:1.16938;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+	</svg>`;
+	close_button.addEventListener("click", close_all_big_windows);
+	header.appendChild(close_button);
+
+	// Add a notification bell to the header
+	const bell = document.createElement("div");
+	bell.classList.add("notif-bell");
+	bell.innerHTML = `<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 6.3499998 6.3499998" version="1.1">
+		<path id="path836" d="M 1.9478849,1.4110091 1.3302316,5.056386 H 5.0506813 L 4.4442777,1.4110091 Z" style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.341914;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+		<path sodipodi:nodetypes="cc" id="path838" d="m 2.3066466,1.3135106 c 0.00594,-1.27791911 1.7769213,-1.27090573 1.7675823,0.00913" style="fill:none;stroke:#000000;stroke-width:0.341914;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+		<path id="path840" d="M 3.1904559,5.1709312 V 5.5311636" style="fill:none;stroke:#000000;stroke-width:0.341914;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+		<circle r="0.41029888" cy="5.8446188" cx="3.1904562" id="path842" style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.347641;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
+		<rect transform="rotate(-35)" ry="0.077817149" y="4.3833895" x="-2.7801442" height="0.31083247" width="6.993731" id="rect856" style="fill:#000000;fill-opacity:1;stroke:#f5f5f5;stroke-width:0.621666;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" />
+	</svg>`
+	bell.addEventListener("click", () => {
+		bell.classList.toggle("activated");
+	});
+	header.appendChild(bell);
+
+	// Insert the header
 	big_window.appendChild(header);
 
 	// Insert window

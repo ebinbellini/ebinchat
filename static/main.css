@@ -880,7 +880,8 @@ header .input-container input, header .input-container textarea {
     transform: scale(1);
 }
 
-.big-window .close-button {
+.big-window .close-button,
+.big-window .notif-bell {
     position: absolute;
     top: 0;
     left: 0;
@@ -889,16 +890,36 @@ header .input-container input, header .input-container textarea {
     padding: 16px;
     cursor: pointer;
     transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    transform: scale(0.8);
     z-index: 10;
 }
 
-.big-window .close-button:hover {
-    transform: scale(0.9);
+.big-window .notif-bell {
+    left: unset;
+    right: 0;
+    transform: unset;
 }
 
-.big-window .close-button:active {
-    transform: scale(0.65);
+.big-window .notif-bell svg rect:last-of-type {
+    width: 0;
+    transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.big-window .notif-bell.activated svg rect:last-of-type {
+    width: 6.993731px;
+}
+
+.big-window * svg {
+    transform: translateY(-12px);
+}
+
+.big-window .close-button:hover,
+.big-window .notif-bell:hover {
+    transform: scale(1.1);
+}
+
+.big-window .close-button:active,
+.big-window .notif-bell:active {
+    transform: scale(0.9);
 }
 
 .big-window .reversal-container {
