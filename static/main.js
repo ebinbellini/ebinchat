@@ -7,11 +7,14 @@ let user_id = 0;
 let jwt_token = undefined;
 let cookies_ok = false;
 
-let friend_requests = [];
+let push_subscribed = false;
+let sw_registration = null;
 
+let friend_requests = [];
 let history = [];
 let history_index = 0;
 let last_message_id = 0;
+
 
 /*const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
@@ -29,7 +32,23 @@ function main() {
 	check_logged_in();
 	check_cookies_allowed();
 	init_ripple();
-	//register_service_worker();
+	register_service_worker();
+}
+
+function register_service_worker() {
+	if ("serviceWorker" in navigator) {
+		navigator.serviceWorker.register("/sw.js").then(registration => {
+			sw_registration = registration
+			check_if_notifs_are_enabled();
+		});
+	}
+}
+
+function check_if_notifs_are_enabled() {
+	sw_registration.pushManager.getSubscription()
+		.then(subscription => {
+			push_subscribed = !(subscription === null);
+		});
 }
 
 function check_cookies_allowed() {
@@ -303,7 +322,7 @@ function set_contact_search_bar_listener() {
 }
 
 function populate_contacts_list() {
-	get("/fetchcontactlist/").then(resp => {
+	get("/fetchcontactlist").then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
 				const contacts = base64_json_to_object(text)
@@ -374,7 +393,7 @@ function open_conversation(group_data) {
 	return event => {
 		close_all_big_windows();
 
-		const big_window = create_big_window(group_data.groupName);
+		const big_window = create_big_window(group_data);
 
 		// Reversal container to enable automatic resizing of textarea
 		const content = document.createElement("div");
@@ -408,7 +427,7 @@ function open_conversation(group_data) {
 }
 
 function display_previous_messages(group_data) {
-	get("/messages/", group_data.groupID).then(resp => {
+	get("/messages", group_data.groupID).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
 				const messages = base64_json_to_object(text);
@@ -494,7 +513,7 @@ function await_messages_from_group(group_data, message_container) {
 		return
 	}
 
-	get("/awaitmessages/", last_message_id + "/" + group_data.groupID).then(resp => {
+	get("/awaitmessages", last_message_id + "/" + group_data.groupID).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
 				const messages = base64_json_to_object(text);
@@ -548,19 +567,21 @@ function send_message(input, group_data) {
 		if (resp.ok) {
 			input.value = "";
 		} else {
-			display_snackbar("Could not send message. " + resp.text);
+			resp.text().then(text => {
+				display_snackbar("Could not send message. " + text);
+			});
 		}
 	});
 }
 
-function create_big_window(title) {
+function create_big_window(group_data) {
 	// Create window
 	const big_window = document.createElement("div");
 	big_window.classList.add("big-window");
 
 	// Add header
 	const header = document.createElement("header");
-	header.innerText = title;
+	header.innerText = group_data.groupName;
 
 	// Add close button to header
 	const close_button = document.createElement("div");
@@ -582,8 +603,24 @@ function create_big_window(title) {
 		<circle r="0.41029888" cy="5.8446188" cx="3.1904562" id="path842" style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.347641;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
 		<rect transform="rotate(-35)" ry="0.077817149" y="4.3833895" x="-2.7801442" height="0.31083247" width="6.993731" id="rect856" style="fill:#000000;fill-opacity:1;stroke:#f5f5f5;stroke-width:0.621666;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" />
 	</svg>`
+	set_bell_state(group_data, bell);
+
 	bell.addEventListener("click", () => {
-		bell.classList.toggle("activated");
+		const activated = bell.classList.contains("activated");
+		update_notifs_enabled(group_data, !activated, bell);
+		/*const action = activated ? "/unsubscribe/" : "/subscribe/";
+		const response = activated ?
+			"You will no longer receive notifications from this conversation"
+			: "You will now receive notifications from this conversation";
+		get(action, group_data.groupID).then(resp => {
+			if (!resp.ok) {
+				resp.text().then(text => {
+					console.log(text)
+				});
+			} else {
+				display_snackbar(response);
+			}
+		});*/
 	});
 	header.appendChild(bell);
 
@@ -599,6 +636,80 @@ function create_big_window(title) {
 	});
 
 	return big_window;
+}
+
+function set_bell_state(group_data, bell) {
+	get("/amisubscribedtogroup", group_data.groupID).then(resp => {
+		resp.text().then(text => {
+			if (text.includes("はい")) {
+				bell.classList.add("activated");
+			} else {
+				bell.classList.remove("activated");
+			}
+		});
+	});
+}
+
+function update_notifs_enabled(group_data, enable, bell) {
+	if (!push_subscribed) {
+		/*  Will call this function again later when a subscription has been
+			created */
+		request_notification_permission(group_data);
+		return
+	}
+
+	// Should we subscribe or unsubscribe
+	enable = enable ? "1" : "0";
+
+	// Send request
+	get("/subscribegroup", group_data.groupID + "/" + enable).then(resp => {
+		if (resp.ok) {
+			const res = enable == "1" ?
+				"Turned on notifications for group " + group_data.groupName
+				: "Turned off notifications for group " + group_data.groupName;
+			display_snackbar(res);
+			set_bell_state(group_data, bell);
+		} else {
+			resp.text().then(text => {
+				display_snackbar(text);
+			});
+		}
+	});
+}
+
+async function request_notification_permission(group_data) {
+	const resp = await get("/vapid");
+	const vapid = await resp.text();
+	const applicationServerKey = vapid;
+	sw_registration.pushManager.subscribe({
+		userVisibleOnly: true,
+		applicationServerKey: applicationServerKey
+	}).then(subscription => {
+		console.log('User is subscribed:', subscription);
+		send_subscription_to_server(subscription, group_data);
+	});
+}
+
+function send_subscription_to_server(subscription, group_data) {
+	const sub = JSON.stringify(subscription.toJSON());
+	fetch("/subscribepush/" + jwt_token,
+		{
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: sub,
+		}).then(resp => {
+			if (resp.ok) {
+				display_snackbar("Enabled notifications");
+				push_subscribed = true
+				update_notifs_enabled(group_data, true)
+			} else {
+				resp.text().then(text => {
+					display_snackbar(text);
+				})
+			}
+		});
 }
 
 function close_all_big_windows() {
@@ -632,7 +743,7 @@ function insert_contact_button(ぼたん) {
 }
 
 function check_friend_requests() {
-	get("fetchfriendrequests").then(resp => {
+	get("/fetchfriendrequests").then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
 				const requests = base64_json_to_object(text);
@@ -720,7 +831,7 @@ function is_child_of(child, parent) {
 function show_profile_picture() {
 	const pic = document.getElementsByClassName("my-profile-pic")[0];
 	pic.style.backgroundImage = "url(/profilepics/default.svg)";
-	get("profilepicurl").then(response => {
+	get("/profilepicurl").then(response => {
 		if (response.ok) {
 			response.text().then(url => {
 				pic.style.backgroundImage = "url(/profilepics/" + url + ")";
@@ -790,7 +901,7 @@ async function open_create_group() {
 	const sheet = create_sheet();
 
 	let friend_list = [];
-	const resp = await get("/fetchfriendlist/");
+	const resp = await get("/fetchfriendlist");
 	const text = await resp.text();
 
 	if (resp.ok) {
@@ -955,7 +1066,7 @@ function dialog_accept_friend_request(request) {
 
 function accept_friend_request(request) {
 	const name = decodeURIComponent(escape(request.name));
-	get("acceptfriendrequest", request.id).then(resp => {
+	get("/acceptfriendrequest", request.id).then(resp => {
 		if (resp.ok) {
 			display_snackbar(`Accepted friend request from ${name}`);
 		} else {
@@ -1007,7 +1118,7 @@ function search_for_users(sheet) {
 		if (query == "") {
 			return;
 		}
-		get("searchuser", query).then(response => {
+		get("/searchuser", query).then(response => {
 			if (!response.ok)
 				return;
 
@@ -1055,7 +1166,7 @@ function create_friend_request_button(user_info, hint) {
 function send_friend_request(user_info) {
 	const id = user_info.id;
 	const name = decodeURIComponent(escape(user_info.name));
-	get("sendfriendrequest", user_info.id).then(resp => {
+	get("/sendfriendrequest", user_info.id).then(resp => {
 		if (!resp.ok) {
 			resp.text().then(text => {
 				display_snackbar("Unable to send friend request, " + text.toLowerCase());

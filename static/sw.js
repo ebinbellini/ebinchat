@@ -1,6 +1,4 @@
-//importScripts('/app/js/cache-polyfill.js');
-
-const CACHE = "バージョン第一";
+/*const CACHE = "バージョン第一";
 // How long user-created images are stored (in seconds)
 const IMAGE_CACHE_TIME = 2 * 24 * 60 * 60 // Two days
 const IMAGE = "写真キャシュだぜ"
@@ -77,7 +75,7 @@ function precache() {
 			"imgs/usekta.png",
 			"imgs/ank.gif",
 		]));
-}
+}*/
 
 self.addEventListener('push', event => {
 	console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);

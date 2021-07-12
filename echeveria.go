@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -135,8 +136,10 @@ func main() {
 	http.HandleFunc("/vapid/", respondToGetVapidPublic)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
 	http.HandleFunc("/messages/", respondToGetMessages)
+	http.HandleFunc("/subscribegroup/", respondToSubscribeToGroup)
+	http.HandleFunc("/amisubscribedtogroup/", respondToAmISubscribedToGroup)
+	http.HandleFunc("/subscribepush/", respondToSubscribePush)
 	//http.HandleFunc("/uploadfile/", respondToUploadFile)
-	//http.HandleFunc("/subscribe/", respondToSubscribePush)
 
 	fmt.Println("1337のポートを待機しています...")
 	err := http.ListenAndServe(":1337", nil)
@@ -211,10 +214,18 @@ func openMySQLDatabase() {
 		timestamp DATETIME,
 		PRIMARY KEY (id)`)
 
+	createTable("push_subscribers", `user_id INT,
+		subscription VARCHAR(512),
+		PRIMARY KEY (user_id)`)
+
+	createTable("convo_notif_subscribers", `user_id INT,
+		group_id INT,
+		PRIMARY KEY (user_id)`)
+
 	// Enable searching for usernames
-	_, err = sqlDB.Exec(`ALTER TABLE users ADD FULLTEXT(name)`)
+	_, err = sqlDB.Exec(`CREATE FULLTEXT INDEX name_fulltext ON users(name)`)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("インデックスを作る時にこのエラーが出てきた " + err.Error())
 	} else {
 		fmt.Println("ユーザー名前のインデックスを作った")
 	}
@@ -226,7 +237,7 @@ func createTable(name, fields string) {
 		if strings.Contains(err.Error(), "already exists") {
 			fmt.Println("「" + name + "」というなテーブルはもうありますから作れない")
 		} else {
-			fmt.Println(err)
+			fmt.Println("「" + name + "」を作る時にこのエラーが出てきた " + err.Error())
 		}
 	} else {
 		fmt.Println("「" + name + "」というなテーブルを作った")
@@ -328,6 +339,8 @@ func createUserJWT(id int64, name string, email string) string {
 
 func initWebPush() {
 	var err error
+	/*	TODO store keys in SQL database to avoid having to generate new ones
+		after updates */
 	vapidPrivate, vapidPublic, err = webpush.GenerateVAPIDKeys()
 	if err != nil {
 		fmt.Println("ウェブプッシュを開始するできませんでした", err)
@@ -1086,35 +1099,153 @@ func validateJWTClaims(tokenString string) *jwt.MapClaims {
 	return nil
 }
 
-/*func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Path
-	split := strings.Split(url, "/")
+func respondToAmISubscribedToGroup(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
 	if len(split) != 4 {
 		serveBadRequest(w, r)
 		return
 	}
-	roomName := split[2]
-	userName := split[3]
-	room := rooms[roomName]
 
-	// Decode subscription
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(r.Body)
-	subscriptionJSON := buf.String()
-	subscription := &webpush.Subscription{}
-	err := json.Unmarshal([]byte(subscriptionJSON), subscription)
-	if err != nil {
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
+	}
+
+	userID := (*claims)["id"].(string)
+	groupID := split[3]
+
+	ans := "いいえ"
+	if userHasNotificationsEnabledForGroup(userID, groupID) {
+		ans = "はい"
+	}
+
+	fmt.Fprintln(w, ans)
+}
+
+// Returns true if the user is subscribed to the group
+func userHasNotificationsEnabledForGroup(userID, groupID string) bool {
+	query := "SELECT 1 FROM convo_notif_subscribers WHERE user_id=? AND group_id=?"
+	var epin int64
+	err := sqlDB.QueryRow(query, userID, groupID).Scan(&epin)
+	return err == nil
+}
+
+// (Un)subscribes the user to notifications from a certain chat group
+func respondToSubscribeToGroup(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 5 {
 		serveBadRequest(w, r)
 		return
 	}
 
-	sub := Subscriber{
-		Name:   userName,
-		WebSub: subscription,
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
 	}
 
-	room.Subscribers = append(room.Subscribers, sub)
-}*/
+	userID := (*claims)["id"].(string)
+	groupID := split[3]
+	subscribe := split[4]
+
+	// Check if user is in this group
+	if !isUserInGroup(userID, groupID) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
+
+	if subscribe == "1" {
+		// Check if already subscribed
+		if userHasNotificationsEnabledForGroup(userID, groupID) {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, "You have already enabled notifications... (^‿^)？")
+			return
+		}
+
+		// Subscribe
+		query := "INSERT INTO convo_notif_subscribers (user_id, group_id) VALUES (?, ?)"
+		_, err := sqlDB.Exec(query, userID, groupID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err.Error())
+			return
+		}
+	} else {
+		// Unsubbed
+		query := "DELETE FROM convo_notif_subscribers WHERE user_id = ? and group_id = ?"
+		res, err := sqlDB.Exec(query, userID, groupID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err.Error())
+			return
+		}
+
+		count, _ := res.RowsAffected()
+		if count == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, "Notifications were already disabled??")
+			return
+		}
+	}
+}
+
+func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		serveBadRequest(w, r)
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
+	}
+
+	userID := (*claims)["id"].(string)
+
+	// Check if the user is already subscribed
+	query := `SELECT 1 FROM push_subscribers WHERE user_id=?`
+	var epin int64
+	err := sqlDB.QueryRow(query, userID).Scan(&epin)
+	if err == nil {
+		// TODO Replace old line instead if different
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're already subscribed! \\(>o<)/")
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		serveInternalError(w, r)
+		return
+	}
+
+	subscription := string(body)
+
+	// Store subscription
+	query = "INSERT INTO push_subscribers (user_id, subscription) VALUES (?, ?)"
+	sqlDB.Exec(query, userID, subscription)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Respond with success
+	fmt.Fprint(w, "▼・ᴥ・▼")
+}
 
 func serveRequest(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
@@ -1254,7 +1385,6 @@ func isUserInGroup(userID, groupID string) bool {
 	var epin int64
 	err := sqlDB.QueryRow(query, userID, groupID).Scan(&epin)
 
-	// https://stackoverflow.com/questions/37145935/checking-if-a-value-exists-in-sqlite-db-with-go
 	if err != nil {
 		if err != sql.ErrNoRows {
 			fmt.Println(err)
@@ -1429,8 +1559,8 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Increase message count
-	incr := "UPDATE chat_groups SET message_count = message_count + 1 WHERE id = ?"
-	_, err = sqlDB.Exec(incr, groupID)
+	query = "UPDATE chat_groups SET message_count = message_count + 1 WHERE id = ?"
+	_, err = sqlDB.Exec(query, groupID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -1445,8 +1575,8 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update last_message field
-	lsms := "UPDATE chat_groups SET last_message = ? WHERE id = ?"
-	_, err = sqlDB.Exec(lsms, last_message, groupID)
+	query = "UPDATE chat_groups SET last_message = ? WHERE id = ?"
+	_, err = sqlDB.Exec(query, last_message, groupID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
