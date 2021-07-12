@@ -104,7 +104,7 @@ self.addEventListener('notificationclick', event => {
 		console.log("Not implemented");
 	} else {
 		// If clicked on open or notification body
-		const url = `/room.html?room=${data.Room}&name=${data.Name}`;
+		const url = `/?group_id=${data.GroupID}`;
 		event.waitUntil(clients.matchAll({ type: 'window' }).then(clients_arr => {
 			let window_exists = false;
 			for (const client of clients_arr) {
@@ -119,3 +119,5 @@ self.addEventListener('notificationclick', event => {
 		}));
 	}
 }, false);
+
+// TODO pushsubscriptionchange event

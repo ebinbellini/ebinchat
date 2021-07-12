@@ -61,10 +61,10 @@ type Subscriber struct {
 
 // NotificationContents Contains all the information that is sent through web push
 type NotificationContents struct {
-	Sender string
-	Text   string
-	Name   string // The name of the reciever
-	Room   string
+	Sender  string
+	Text    string
+	Name    string // The name of the reciever
+	GroupID string
 }
 
 // PublicUserInfo The information about users that everyone can see
@@ -114,9 +114,9 @@ var sqlDB *sql.DB
 
 func main() {
 	fmt.Println("サーバーをスタートします…")
-	initWebPush()
 	openMySQLDatabase()
 	generateHMACPrivateKey()
+	initWebPush()
 
 	http.HandleFunc("/", serveRequest)
 	http.HandleFunc("/signup", respondToSignUp)
@@ -128,6 +128,7 @@ func main() {
 	http.HandleFunc("/acceptfriendrequest/", respondToAcceptFriendRequest)
 	http.HandleFunc("/fetchcontactlist/", respondToFetchContactList)
 	http.HandleFunc("/fetchfriendlist/", respondToFetchFriendList)
+	http.HandleFunc("/fetchgroupdata/", respondToFetchGroupData)
 	http.HandleFunc("/creategroup/", respondToCreateGroup)
 	http.HandleFunc("/validatejwt/", respondToValidateJWT)
 	http.HandleFunc("/profilepics/", respondToProfilePics)
@@ -215,12 +216,16 @@ func openMySQLDatabase() {
 		PRIMARY KEY (id)`)
 
 	createTable("push_subscribers", `user_id INT,
-		subscription VARCHAR(512),
+		subscription VARCHAR(2048),
 		PRIMARY KEY (user_id)`)
 
 	createTable("convo_notif_subscribers", `user_id INT,
 		group_id INT,
 		PRIMARY KEY (user_id)`)
+
+	createTable("server_data", `data_key VARCHAR(50),
+		value VARCHAR(2048),
+		PRIMARY KEY (data_key)`)
 
 	// Enable searching for usernames
 	_, err = sqlDB.Exec(`CREATE FULLTEXT INDEX name_fulltext ON users(name)`)
@@ -338,14 +343,47 @@ func createUserJWT(id int64, name string, email string) string {
 }
 
 func initWebPush() {
-	var err error
-	/*	TODO store keys in SQL database to avoid having to generate new ones
-		after updates */
-	vapidPrivate, vapidPublic, err = webpush.GenerateVAPIDKeys()
+	// Should keys be generated
+	gen := false
+
+	query := "SELECT value FROM server_data WHERE data_key='vapid_public'"
+	err := sqlDB.QueryRow(query).Scan(&vapidPublic)
 	if err != nil {
-		fmt.Println("ウェブプッシュを開始するできませんでした", err)
-		return
+		fmt.Println(err)
+		gen = true
 	}
+
+	query = "SELECT value FROM server_data WHERE data_key='vapid_private'"
+	err = sqlDB.QueryRow(query).Scan(&vapidPrivate)
+	if err != nil {
+		fmt.Println(err)
+		gen = true
+	}
+
+	if gen {
+		// Retrieving vapid keys failed. It is time to generate new keys.
+		vapidPrivate, vapidPublic, err = webpush.GenerateVAPIDKeys()
+		if err != nil {
+			fmt.Println("ウェブプッシュを開始するできませんでした", err)
+			return
+		}
+
+		// Store new keys in database
+		query = "INSERT INTO server_data (data_key, value) VALUE (?, ?)"
+		_, err = sqlDB.Exec(query, "vapid_public", vapidPublic)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		query = "INSERT INTO server_data (data_key, value) VALUE (?, ?)"
+		_, err = sqlDB.Exec(query, "vapid_private", vapidPrivate)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+
 	fmt.Println("ウェブプッシュを開始しました")
 }
 
@@ -592,6 +630,33 @@ func getUserName(userID string) (name string) {
 	return
 }
 
+func getUserEmail(userID int) (email string) {
+	row := sqlDB.QueryRow("SELECT email FROM users WHERE id=?", userID)
+	err := row.Scan(&email)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return
+}
+
+func getGroupName(groupID string) (string, error) {
+	query := "SELECT group_name FROM chat_groups WHERE id=?"
+	row := sqlDB.QueryRow(query, groupID)
+
+	groupName := sql.NullString{}
+
+	err := row.Scan(&groupName)
+	if err != nil {
+		return "", err
+	}
+
+	if groupName.Valid {
+		return groupName.String, nil
+	} else {
+		return "", errors.New("This group has no name")
+	}
+}
+
 func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
@@ -833,7 +898,7 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if string(id1) == (*claims)["id"] {
+		if strconv.Itoa(id1) == (*claims)["id"] {
 			friendIDs = append(friendIDs, id2)
 		} else {
 			friendIDs = append(friendIDs, id1)
@@ -853,6 +918,73 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(res)
 	} else {
 		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, err)
+	}
+}
+
+func respondToFetchGroupData(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 4 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "err...?")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	userID := (*claims)["id"].(string)
+	groupID := split[3]
+
+	// Check if user is in group
+	if !isUserInGroup(userID, groupID) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
+
+	row := sqlDB.QueryRow(`SELECT id, group_name, image, is_direct,
+		last_message, last_event_time, created_at
+		FROM chat_groups WHERE id=?`, groupID)
+
+	gd := GroupData{}
+	groupName := sql.NullString{}
+
+	err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
+		&gd.LastMessage, &gd.LastEventTime, &gd.CreatedAt)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, err)
+		return
+	}
+	if groupName.Valid {
+		gd.GroupName = groupName.String
+	}
+
+	// If the group is direct, fetch the user data instead
+	if gd.IsDirect {
+		row1 := sqlDB.QueryRow(`SELECT user_id FROM group_members
+				WHERE group_id=? AND user_id<>?`, groupID, (*claims)["id"])
+		var id int
+		err := row1.Scan(&id)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, err)
+			return
+		}
+		gd.GroupName, gd.ImageURL = getUserNameAndImage(id)
+	}
+
+	res, err := json.Marshal(gd)
+	if err == nil {
+		json.NewEncoder(w).Encode(res)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 	}
 }
@@ -1236,7 +1368,7 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 
 	// Store subscription
 	query = "INSERT INTO push_subscribers (user_id, subscription) VALUES (?, ?)"
-	sqlDB.Exec(query, userID, subscription)
+	_, err = sqlDB.Exec(query, userID, subscription)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -1584,7 +1716,6 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO fix this
 	notifyListeners(message)
 
 	// TODO ADD A MESSAGE LIMIT
@@ -1596,13 +1727,13 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 func notifyListeners(message Message) {
 	_, ok := listenergroups[message.GroupID]
 	if ok {
-		handleListeners(message)
+		handleListeners(&message)
 	}
 
-	//sendNotifications(message)
+	sendNotifications(&message)
 }
 
-func handleListeners(message Message) {
+func handleListeners(message *Message) {
 	for _, listener := range listenergroups[message.GroupID].Listeners {
 		// If not used and not expired
 		if !listener.Used && listener.Expires.After(time.Now()) {
@@ -1641,41 +1772,91 @@ func handleListeners(message Message) {
 	}
 }
 
-/*func sendNotifications(message Message) {
-	message.GroupID
+func sendNotifications(message *Message) {
+	groupID := message.GroupID
 
-	for _, subscriber := range room.Subscribers {
-		// Don't send notification to the sender
-		//if subscriber.Name == message.SenderName {
-		//continue
-		//}
+	query := "SELECT user_id FROM group_members WHERE group_id=?"
+	rows, err := sqlDB.Query(query, groupID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer rows.Close()
 
-		// Build notification payload
-		notifContents := &NotificationContents{
-			//Sender: message.SenderName,
-			Text: message.Text,
-			Name: subscriber.Name,
-		}
-		text, err := json.Marshal(notifContents)
+	senderName := getUserName(message.SenderID)
+
+	groupName, err := getGroupName(groupID)
+	if err != nil {
+		// This is a direct chat
+		groupName = senderName
+	}
+
+	for rows.Next() {
+		var userID int
+		err := rows.Scan(&userID)
 		if err != nil {
 			fmt.Println(err)
-		}
-
-		// Send Notification
-		subscription := subscriber.WebSub
-		resp, err := webpush.SendNotification(text, subscription, &webpush.Options{
-			TTL:             30,
-			Topic:           room.Name,
-			Subscriber:      "ebinbellini@airmail.cc",
-			VAPIDPublicKey:  vapidPublic,
-			VAPIDPrivateKey: vapidPrivate,
-		})
-		if err != nil {
-			fmt.Println("通知を送信できませんでした", err)
 			return
 		}
-		fmt.Println("通知を送信できました。いいね！", resp.Status)
-		defer resp.Body.Close()
+
+		// Don't send to sender
+		if message.SenderID == strconv.Itoa(userID) {
+			continue
+		}
+
+		go sendNotificationToUser(message, userID, groupID, senderName, groupName)
 	}
 }
-*/
+
+func sendNotificationToUser(message *Message, userID int, groupID, senderName, groupName string) {
+	// Fetch the user's data
+	name := getUserName(strconv.Itoa(userID))
+	recieverEmail := getUserEmail(userID)
+
+	// Fetch the user's web push subscrption
+	query := "SELECT subscription FROM push_subscribers WHERE user_id=?"
+	subscriptionJSON := ""
+	err := sqlDB.QueryRow(query, userID).Scan(&subscriptionJSON)
+	if err != nil {
+		return
+	}
+	subscription := webpush.Subscription{}
+	json.Unmarshal([]byte(subscriptionJSON), &subscription)
+
+	// Build the notification payload
+	notifContents := &NotificationContents{
+		Sender:  senderName,
+		Text:    message.Text,
+		Name:    name,
+		GroupID: groupID,
+	}
+
+	text, err := json.Marshal(notifContents)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Send Notification
+	resp, err := webpush.SendNotification(text, &subscription, &webpush.Options{
+		TTL:             30,
+		Topic:           groupName,
+		Subscriber:      recieverEmail,
+		VAPIDPublicKey:  vapidPublic,
+		VAPIDPrivateKey: vapidPrivate,
+	})
+	defer resp.Body.Close()
+
+	if err != nil {
+		fmt.Println("通知を送信できませんでした", err)
+		return
+	}
+
+	res, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(string(res))
+
+	fmt.Println("通知を送信できました。いいね！", resp.Status)
+}

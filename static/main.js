@@ -305,10 +305,34 @@ function display_logged_in_ui() {
 	check_friend_requests();
 	populate_contacts_list();
 
+	// Do actions specified in query string
+	follow_directions_in_query_string();
+
 	setTimeout(show_main, 100);
 	setTimeout(() => {
 		login.style.display = "none";
 	}, 250);
+}
+
+function follow_directions_in_query_string() {
+	const urlSearchParams = new URLSearchParams(window.location.search);
+	const params = Object.fromEntries(urlSearchParams.entries());
+
+	if (params.group_id != undefined) {
+		get("/fetchgroupdata", params.group_id).then(resp => {
+			console.log(resp);
+			if (resp.ok) {
+				resp.text().then(group_data => {
+					console.log(base64_json_to_object(group_data));
+					open_conversation(base64_json_to_object(group_data))();
+				});
+			} else {
+				resp.text().then(text => {
+					display_snackbar(text);
+				});
+			}
+		})
+	}
 }
 
 function set_contact_search_bar_listener() {
@@ -390,7 +414,7 @@ function create_contact_button(data) {
 }
 
 function open_conversation(group_data) {
-	return event => {
+	return _ => {
 		close_all_big_windows();
 
 		const big_window = create_big_window(group_data);
@@ -541,13 +565,9 @@ function message_input_keydown(group_data) {
 		const input = event.target;
 		// TODO enter on mobile should not send
 		if (!event.shiftKey && event.code == "Enter") {
-			// Remove enter from the end of value
-			requestAnimationFrame(() => {
-				input.value = trim_enters(input.value);
-				if (input.value.length > 0) {
-					send_message(input, group_data);
-				}
-			});
+			if (input.value.length > 0) {
+				send_message(input, group_data);
+			}
 		}
 	}
 }
