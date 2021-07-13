@@ -1347,17 +1347,6 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 
 	userID := (*claims)["id"].(string)
 
-	// Check if the user is already subscribed
-	query := `SELECT 1 FROM push_subscribers WHERE user_id=?`
-	var epin int64
-	err := sqlDB.QueryRow(query, userID).Scan(&epin)
-	if err == nil {
-		// TODO Replace old line instead if different
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "You're already subscribed! \\(>o<)/")
-		return
-	}
-
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		serveInternalError(w, r)
@@ -1365,6 +1354,23 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	subscription := string(body)
+
+	// Check if the user is already subscribed
+	query := `SELECT 1 FROM push_subscribers WHERE user_id=?`
+	var epin int64
+	err = sqlDB.QueryRow(query, userID).Scan(&epin)
+	if err == nil {
+		// Update record
+		query := `UPDATE push_subscribers SET subscription=? WHERE user_id=?`
+		_, err = sqlDB.Exec(query, subscription, userID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Println(w, err.Error())
+			return // <- unnecessary but nice
+		}
+
+		return
+	}
 
 	// Store subscription
 	query = "INSERT INTO push_subscribers (user_id, subscription) VALUES (?, ?)"
@@ -1804,7 +1810,7 @@ func sendNotifications(message *Message) {
 			continue
 		}
 
-		go sendNotificationToUser(message, userID, groupID, senderName, groupName)
+		sendNotificationToUser(message, userID, groupID, senderName, groupName)
 	}
 }
 

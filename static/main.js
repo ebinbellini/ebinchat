@@ -320,10 +320,8 @@ function follow_directions_in_query_string() {
 
 	if (params.group_id != undefined) {
 		get("/fetchgroupdata", params.group_id).then(resp => {
-			console.log(resp);
 			if (resp.ok) {
 				resp.text().then(group_data => {
-					console.log(base64_json_to_object(group_data));
 					open_conversation(base64_json_to_object(group_data))();
 				});
 			} else {
