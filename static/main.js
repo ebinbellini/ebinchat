@@ -299,6 +299,7 @@ function display_logged_in_ui() {
 	set_remove_main_menu_listener();
 	set_contact_search_bar_listener();
 	set_scroll_listener();
+	set_remove_sheet_listener();
 
 	// Display logged in data
 	show_profile_picture();
@@ -330,7 +331,19 @@ function follow_directions_in_query_string() {
 				});
 			}
 		})
+	} else if (params.fren_requests != undefined) {
+		open_invitations();
 	}
+}
+
+function set_remove_sheet_listener() {
+	const main = document.getElementsByTagName("main")[0];
+	main.addEventListener("click", () => {
+		const sheet = document.getElementsByClassName("bottom-sheet")[0];
+		if (main.classList.contains("obscured")) {
+			remove_bottom_sheet(sheet);
+		}
+	});
 }
 
 function set_contact_search_bar_listener() {
@@ -381,13 +394,10 @@ function create_contact_button(data) {
 		</div>
 		<svg class="dots ripple" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
 			version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
-			<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175" id="path837"
-				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+			<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175"				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
 			<ellipse
-				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-				id="path837-9" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
-			<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175" id="path837-9-4"
-				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
+				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" cx="3.175" cy="3.175" rx="0.31523785" ry="0.31523806" />
+			<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175"				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
 		</svg>
 	</div>`;
 
@@ -1116,8 +1126,6 @@ function create_sheet() {
 		sheet.addEventListener("touchstart", enable_sheet_movement(sheet));
 
 		// Add dismissing functionality
-		const main = document.getElementsByTagName("main")[0];
-		main.addEventListener("click", () => remove_bottom_sheet(sheet));
 		shade.addEventListener("click", () => remove_bottom_sheet(sheet));
 
 		// Show the sheet

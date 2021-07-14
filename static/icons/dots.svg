@@ -57,11 +57,9 @@
        rx="0.31523785"
        cy="1.1906251"
        cx="3.175"
-       id="path837"
        style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
     <ellipse
        style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-       id="path837-9"
        cx="3.175"
        cy="3.175"
        rx="0.31523785"
@@ -71,7 +69,6 @@
        rx="0.31523785"
        cy="5.1593752"
        cx="3.175"
-       id="path837-9-4"
        style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
   </g>
 </svg>

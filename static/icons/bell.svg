@@ -53,23 +53,19 @@
      inkscape:groupmode="layer"
      inkscape:label="Layer 1">
     <path
-       id="path836"
        d="M 1.9244988,1.5045534 1.3068455,5.1499303 H 5.0272952 L 4.4208916,1.5045534 Z"
        style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.341914;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <path
        sodipodi:nodetypes="cc"
-       id="path838"
        d="m 2.2832605,1.4070549 c 0.00594,-1.27791908 1.7769213,-1.2709057 1.7675823,0.00913"
        style="fill:none;stroke:#000000;stroke-width:0.341914;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <path
-       id="path840"
        d="M 3.1670698,5.2644755 V 5.6247079"
        style="fill:none;stroke:#000000;stroke-width:0.341914;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <circle
        r="0.41029888"
        cy="5.9381633"
        cx="3.1670702"
-       id="path842"
        style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.347641;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
     <rect
        transform="rotate(-35)"

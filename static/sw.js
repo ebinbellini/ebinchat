@@ -81,13 +81,17 @@ self.addEventListener('push', event => {
 	console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);
 	const data = JSON.parse(event.data.text())
 
-	const title = `New message from ${data.Sender}`;
+	const actions = data.Action == "fren" ?
+		// Friend request
+		[{ action: "open", title: "Open requests" }]
+		// Chat message
+		: [{ action: 'open', title: 'Open chat' },
+		{ action: 'mute', title: 'Mute' }]
+
+	const title = data.Title;
 	const options = {
 		body: data.Text,
-		actions: [
-			{ action: 'open', title: 'Open chat' },
-			{ action: 'mute', title: 'Mute' }
-		],
+		actions: actions,
 		data: data
 	};
 
@@ -103,8 +107,12 @@ self.addEventListener('notificationclick', event => {
 		// TODO mute
 		console.log("Not implemented");
 	} else {
-		// If clicked on open or notification body
-		const url = `/?group_id=${data.GroupID}`;
+		// If the user clicked on open or notification body
+		const url = data.Action == "fren" ?
+			// Friend requst
+			`/?fren_requests`
+			// Chat message
+			: `/?group_id=${data.Action}`;
 		event.waitUntil(clients.matchAll({ type: 'window' }).then(clients_arr => {
 			let window_exists = false;
 			for (const client of clients_arr) {
@@ -120,4 +128,19 @@ self.addEventListener('notificationclick', event => {
 	}
 }, false);
 
-// TODO pushsubscriptionchange event
+self.addEventListener('pushsubscriptionchange', event => {
+	event.waitUntil(swRegistration.pushManager.subscribe(event.oldSubscription.options)
+		.then(subscription => {
+			return fetch("/updatepush", {
+				method: "POST",
+				headers: {
+					"Content-type": "application/json"
+				},
+				body: JSON.stringify({
+					old_endpoint: event.oldSubscription ? event.oldSubscription.endpoint : null,
+					new_subscription: subscription.toJSON(),
+				})
+			})
+		})
+	);
+});

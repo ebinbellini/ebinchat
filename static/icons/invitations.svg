@@ -25,7 +25,6 @@
        style="overflow:visible"
        inkscape:isstock="true">
       <path
-         id="path2122"
          d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
          style="fill-rule:evenodd;stroke:#000000;stroke-width:1.0pt"
          transform="scale(0.8) translate(12.5,0)" />
@@ -72,12 +71,10 @@
        rx="1.5068451"
        cy="4.121819"
        cx="-3.7183938"
-       id="path837-8"
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
        transform="scale(-1,1)" />
     <path
        sodipodi:nodetypes="csc"
-       id="path860-6"
        d="m 4.24877,7.5916772 c 0,0 -0.3228752,-0.015687 -0.6671007,-0.015035 -2.74609297,0.0052 -2.78222223,2.3118536 -2.78222223,2.3118536"
        style="fill:none;stroke:#484848;stroke-width:0.787186;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <rect
@@ -90,7 +87,6 @@
        transform="scale(-1)" />
     <path
        style="fill:none;stroke:#484848;stroke-width:0.765;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
-       d="M 4.9945993,6.5313988 8.4022858,8.6695551 11.910198,6.5313988"
-       id="path2403" />
+       d="M 4.9945993,6.5313988 8.4022858,8.6695551 11.910198,6.5313988" />
   </g>
 </svg>

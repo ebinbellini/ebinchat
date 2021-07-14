@@ -129,14 +129,12 @@
        style="fill:url(#linearGradient2801);fill-opacity:1;stroke:none;stroke-width:0;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
     <circle
        style="fill:none;fill-opacity:1;stroke:url(#linearGradient847);stroke-width:0.79375;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
-       id="path837"
        cx="6.5639954"
        cy="4.2368503"
        r="3.1638474" />
     <path
        style="fill:none;stroke:url(#linearGradient2783);stroke-width:0.79375;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 2.5239991,11.878814 c 0,0 0.07726,-3.3695492 4.144736,-3.3771116 3.9843629,-0.00742 4.0363739,3.3984856 4.0363739,3.3984856"
-       id="path860"
        sodipodi:nodetypes="csc" />
   </g>
 </svg>

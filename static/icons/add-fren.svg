@@ -57,7 +57,6 @@
        rx="2.3099387"
        cy="3.5057294"
        cx="5.1187129"
-       id="path837"
        style="fill:none;stroke:#484848;stroke-width:0.8;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
     <rect
        y="5.58918"
@@ -76,7 +75,6 @@
        y="-10.267331" />
     <path
        sodipodi:nodetypes="csc"
-       id="path860"
        d="m 1.6536459,10.752631 c 0,0 0.067374,-3.1040701 3.6143972,-3.1110368 3.4745462,-0.00683 3.5199032,3.1307278 3.5199032,3.1307278"
        style="fill:none;stroke:#484848;stroke-width:0.730368;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
   </g>

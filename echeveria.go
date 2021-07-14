@@ -59,12 +59,18 @@ type Subscriber struct {
 	WebSub *webpush.Subscription
 }
 
+type SubscriptionUpdate struct {
+	OldEndpoint string
+	WebSub      *webpush.Subscription
+}
+
 // NotificationContents Contains all the information that is sent through web push
 type NotificationContents struct {
-	Sender  string
-	Text    string
-	Name    string // The name of the reciever
-	GroupID string
+	Title  string
+	Text   string
+	Image  string
+	Name   string // The name of the reciever
+	Action string
 }
 
 // PublicUserInfo The information about users that everyone can see
@@ -140,6 +146,8 @@ func main() {
 	http.HandleFunc("/subscribegroup/", respondToSubscribeToGroup)
 	http.HandleFunc("/amisubscribedtogroup/", respondToAmISubscribedToGroup)
 	http.HandleFunc("/subscribepush/", respondToSubscribePush)
+	http.HandleFunc("/updatepush/", respondToUpdatePush)
+
 	//http.HandleFunc("/uploadfile/", respondToUploadFile)
 
 	fmt.Println("1337のポートを待機しています...")
@@ -205,7 +213,8 @@ func openMySQLDatabase() {
 
 	createTable("group_members", `group_id INT,
 		user_id INT,
-		created_at DATETIME`)
+		created_at DATETIME,
+		PRIMARY KEY (group_id, user_id)`)
 
 	createTable("messages", `id INT AUTO_INCREMENT,
 		sender_id INT,
@@ -221,7 +230,7 @@ func openMySQLDatabase() {
 
 	createTable("convo_notif_subscribers", `user_id INT,
 		group_id INT,
-		PRIMARY KEY (user_id)`)
+		PRIMARY KEY (user_id, group_id)`)
 
 	createTable("server_data", `data_key VARCHAR(50),
 		value VARCHAR(2048),
@@ -250,8 +259,6 @@ func createTable(name, fields string) {
 }
 
 func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// TODO see if you can use push notifications instead
-
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
 	if len(split) != 5 {
@@ -514,10 +521,11 @@ func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, err)
 		return
 	}
+	senderID := (*claims)["id"].(string)
 
 	// Check if already friends
 	query := "SELECT id1 FROM friends WHERE (id1=? AND id2=?) OR (id2=? AND id1=?)"
-	rows1, err := sqlDB.Query(query, (*claims)["id"], recieverID, (*claims)["id"], recieverID)
+	rows1, err := sqlDB.Query(query, senderID, recieverID, (*claims)["id"], recieverID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -532,7 +540,7 @@ func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Check if such a friend request already exists
 	query = "SELECT id FROM friend_requests WHERE (sender=? AND reciever=?)"
-	rows2, err := sqlDB.Query(query, (*claims)["id"], recieverID)
+	rows2, err := sqlDB.Query(query, senderID, recieverID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -547,14 +555,33 @@ func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Send friend request
 	query = "INSERT INTO friend_requests (sender, reciever, created_at) VALUES (?, ?, ?)"
-	sqlDB.Exec(query, (*claims)["id"], recieverID, time.Now())
+	sqlDB.Exec(query, senderID, recieverID, time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 		return
 	}
 
-	// TODO push notification
+	sendFriendRequestNotification(senderID, recieverID)
+}
+
+func sendFriendRequestNotification(senderID string, recieverID string) {
+	sid, err := strconv.Atoi(senderID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	rid, err := strconv.Atoi(recieverID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	name, image := getUserNameAndImage(sid)
+	text := name + " wants to be your fren! ＼(＾▽＾)／"
+
+	sendNotificationToUser(text, rid, "fren", "New friend request", "Friend requests", image)
 }
 
 func respondToFetchFriendRequests(w http.ResponseWriter, r *http.Request) {
@@ -639,21 +666,22 @@ func getUserEmail(userID int) (email string) {
 	return
 }
 
-func getGroupName(groupID string) (string, error) {
-	query := "SELECT group_name FROM chat_groups WHERE id=?"
+func getGroupNameAndImage(groupID string) (name string, image string, err error) {
+	query := "SELECT group_name, image FROM chat_groups WHERE id=?"
+
 	row := sqlDB.QueryRow(query, groupID)
 
 	groupName := sql.NullString{}
 
-	err := row.Scan(&groupName)
+	err = row.Scan(&groupName, &image)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if groupName.Valid {
-		return groupName.String, nil
+		return groupName.String, image, nil
 	} else {
-		return "", errors.New("This group has no name")
+		return "", image, errors.New("This group has no name")
 	}
 }
 
@@ -1385,6 +1413,25 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "▼・ᴥ・▼")
 }
 
+func respondToUpdatePush(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		serveInternalError(w, r)
+		return
+	}
+
+	update := SubscriptionUpdate{}
+	json.Unmarshal(body, &update)
+
+	query := `UPDATE push_subscribers
+		SET subscription=?
+		WHERE subscription LIKE concat('{"endpoint":"', ? '","expirationTime%')`
+	_, err = sqlDB.Exec(query, update.WebSub, update.OldEndpoint)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 func serveRequest(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path
 	fp := filepath.Join("static", filepath.Clean(url))
@@ -1791,7 +1838,7 @@ func sendNotifications(message *Message) {
 
 	senderName := getUserName(message.SenderID)
 
-	groupName, err := getGroupName(groupID)
+	groupName, image, err := getGroupNameAndImage(groupID)
 	if err != nil {
 		// This is a direct chat
 		groupName = senderName
@@ -1810,19 +1857,18 @@ func sendNotifications(message *Message) {
 			continue
 		}
 
-		sendNotificationToUser(message, userID, groupID, senderName, groupName)
+		title := "New message from " + senderName
+		sendNotificationToUser(message.Text, userID, groupID, title, groupName, image)
 	}
 }
 
-func sendNotificationToUser(message *Message, userID int, groupID, senderName, groupName string) {
-	// Fetch the user's data
-	name := getUserName(strconv.Itoa(userID))
-	recieverEmail := getUserEmail(userID)
+func sendNotificationToUser(text string, recieverID int, action, title, topic, image string) {
+	recieverEmail := getUserEmail(recieverID)
 
 	// Fetch the user's web push subscrption
 	query := "SELECT subscription FROM push_subscribers WHERE user_id=?"
 	subscriptionJSON := ""
-	err := sqlDB.QueryRow(query, userID).Scan(&subscriptionJSON)
+	err := sqlDB.QueryRow(query, recieverID).Scan(&subscriptionJSON)
 	if err != nil {
 		return
 	}
@@ -1831,22 +1877,22 @@ func sendNotificationToUser(message *Message, userID int, groupID, senderName, g
 
 	// Build the notification payload
 	notifContents := &NotificationContents{
-		Sender:  senderName,
-		Text:    message.Text,
-		Name:    name,
-		GroupID: groupID,
+		Title:  title,
+		Text:   text,
+		Action: action,
+		Image:  image,
 	}
 
-	text, err := json.Marshal(notifContents)
+	content, err := json.Marshal(notifContents)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	// Send Notification
-	resp, err := webpush.SendNotification(text, &subscription, &webpush.Options{
+	resp, err := webpush.SendNotification(content, &subscription, &webpush.Options{
 		TTL:             30,
-		Topic:           groupName,
+		Topic:           topic,
 		Subscriber:      recieverEmail,
 		VAPIDPublicKey:  vapidPublic,
 		VAPIDPrivateKey: vapidPrivate,
@@ -1861,8 +1907,8 @@ func sendNotificationToUser(message *Message, userID int, groupID, senderName, g
 	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println(string(res))
 	}
-	fmt.Println(string(res))
 
-	fmt.Println("通知を送信できました。いいね！", resp.Status)
+	//fmt.Println("通知を送信できました。いいね！", resp.Status)
 }

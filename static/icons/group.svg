@@ -54,7 +54,6 @@
      id="layer1">
     <ellipse
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke"
-       id="path837"
        cx="3.1698377"
        cy="7.3222218"
        rx="1.5068451"
@@ -62,18 +61,15 @@
     <path
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 0.90946604,11.900584 c 0,0 0.04395,-1.9610532 2.35778406,-1.9654546 2.2665549,-0.00431 2.2961427,1.9778946 2.2961427,1.9778946"
-       id="path860"
        sodipodi:nodetypes="csc" />
     <ellipse
        ry="1.4593457"
        rx="1.5068451"
        cy="5.5298524"
        cx="9.8316441"
-       id="path837-3"
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
     <path
        sodipodi:nodetypes="csc"
-       id="path860-3"
        d="m 7.5712717,10.108214 c 0,0 0.04395,-1.9610527 2.3577844,-1.9654543 2.2665549,-0.00431 2.2961429,1.9778943 2.2961429,1.9778943"
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <ellipse
@@ -81,11 +77,9 @@
        rx="1.5068451"
        cy="2.8603952"
        cx="5.2014346"
-       id="path837-8"
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-miterlimit:4;stroke-dasharray:none;paint-order:markers fill stroke" />
     <path
        sodipodi:nodetypes="csc"
-       id="path860-6"
        d="m 4.6655796,5.6433702 c 0,0 0.1148206,-0.1420423 0.6332679,-0.1700674 2.2632549,-0.1223422 2.2961428,1.9778945 2.2961428,1.9778945"
        style="fill:none;stroke:#484848;stroke-width:0.661458;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
   </g>

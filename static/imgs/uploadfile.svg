@@ -55,17 +55,14 @@
     <path
        style="fill:none;stroke:#e5e5e5;stroke-width:1.565;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 10.618609,9.6278283 -5.3759176,-0.0029 c 0,0 -3.3310167,-0.188903 -3.307292,3.0710557 l 0.06682,9.181563 c 0,0 -0.09449,3.307291 2.834822,3.307291 2.9293146,0 21.3349326,-0.236236 21.3349326,-0.236236 0,0 2.69308,0.141743 2.645833,-2.976561 -0.04725,-3.118304 -0.05536,-9.865945 -0.05536,-9.865945 0,0 -0.03103,-2.5503557 -2.535127,-2.5503557 -2.504091,0 -7.454956,0.02195 -7.454956,0.02195 v 0"
-       id="path833"
        sodipodi:nodetypes="ccscscscscc" />
     <path
        style="fill:none;stroke:#e5e5e5;stroke-width:1.665;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="M 14.898111,21.7202 14.709123,2.065438 v 0 0"
-       id="path841"
        sodipodi:nodetypes="cccc" />
     <path
        style="fill:none;stroke:#e5e5e5;stroke-width:1.665;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 10.560503,5.4398845 4.14862,-3.3744466 3.602196,2.8399076 0.377976,0.2834821"
-       id="path843"
        sodipodi:nodetypes="cccc" />
   </g>
 </svg>
