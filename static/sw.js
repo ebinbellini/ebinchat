@@ -78,8 +78,26 @@ function precache() {
 }*/
 
 self.addEventListener('push', event => {
+	event.waitUntil(handlePush(event));
+});
+
+async function handlePush(event) {
 	console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);
 	const data = JSON.parse(event.data.text())
+
+
+	// Check if a window is already focused
+	// So that we only send notifications when in background
+	const all_clients = await clients.matchAll({
+		includeUncontrolled: true
+	});
+
+	for (const client of all_clients) {
+		if (client.visibilityState === 'visible') {
+			// Open window found, do not display a notification
+			return
+		}
+	}
 
 	const actions = data.Action == "fren" ?
 		// Friend request
@@ -95,9 +113,8 @@ self.addEventListener('push', event => {
 		data: data
 	};
 
-	// TODO only when in background
-	event.waitUntil(self.registration.showNotification(title, options));
-});
+	return self.registration.showNotification(title, options);
+}
 
 self.addEventListener('notificationclick', event => {
 	const data = event.notification.data;
@@ -108,6 +125,7 @@ self.addEventListener('notificationclick', event => {
 		console.log("Not implemented");
 	} else {
 		// If the user clicked on open or notification body
+		// TODO messages instead of URLs
 		const url = data.Action == "fren" ?
 			// Friend requst
 			`/?fren_requests`

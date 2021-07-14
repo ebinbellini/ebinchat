@@ -170,7 +170,6 @@ func openMySQLDatabase() {
 	// Password for test database. Won't work on the real server.
 	// benim:liksomvadeupposv@localhost:3306/echeveria
 
-	// TODO put back this: root:thispasswordisprivate@(127.0.0.1:3306)/echeveria?parseTime=true
 	db, err := sql.Open("mysql", "benim:liksomvadeupposv@(127.0.0.1:3306)/echeveria?parseTime=true")
 	if err != nil {
 		log.Fatal(err)
