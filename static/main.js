@@ -164,7 +164,7 @@ function submit_signup_form(e) {
 							display_snackbar("The email " + values.email + " is already in use");
 						}
 					} else {
-						display_snackbar("An unknown error occurred!");
+						display_snackbar(text);
 					}
 				} else {
 					set_auth_cookie(text);
@@ -775,9 +775,10 @@ function check_friend_requests() {
 		resp.text().then(text => {
 			if (resp.ok) {
 				const requests = base64_json_to_object(text);
-				friend_requests = requests;
 				if (requests.length > 0) {
 					display_red_dot_on_invitations();
+				} else {
+					remove_red_dot_on_invitations();
 				}
 			} else {
 				display_snackbar(text);
@@ -793,12 +794,24 @@ function create_red_dot() {
 }
 
 function display_red_dot_on_invitations() {
+	const prev = document.querySelector("#invitations .red-dot");
+	if (prev) {
+		return;
+	}
+
 	const dot = create_red_dot();
 	dot.style.bottom = "6px";
 	dot.style.left = "6px";
 
 	const invitations = document.getElementById("invitations");
 	invitations.appendChild(dot);
+}
+
+function remove_red_dot_on_invitations() {
+	const dots = document.querySelectorAll("#invitations .red-dot");
+	for (const dot of dots) {
+		dot.remove();
+	}
 }
 
 function set_scroll_listener() {
@@ -1043,18 +1056,37 @@ function search_for_friends_to_add_to_group(sheet) {
 function open_invitations() {
 	const sheet = create_sheet();
 
-	if (friend_requests.length == 0) {
-		sheet.innerHTML += `<div class="center-content" style="margin-top: 24px; font-size: 24px;">
-			No invitations
-		</div>`;
-	} else {
-		for (const request of friend_requests) {
-			// Put all friend requests into the sheet
-			const button = create_friend_request_button(request, decodeURIComponent(escape(request.name)) + " wants to be your friend");
-			button.addEventListener("click", () => dialog_accept_friend_request(request));
-			sheet.appendChild(button);
-		}
-	}
+	get("/fetchfriendrequests").then(resp => {
+		resp.text().then(text => {
+			if (resp.ok) {
+				const requests = base64_json_to_object(text);
+				friend_requests = requests;
+
+				if (requests.length > 0) {
+					display_red_dot_on_invitations();
+				} else {
+					remove_red_dot_on_invitations();
+				}
+
+				if (friend_requests.length == 0) {
+					sheet.innerHTML +=
+						`<div class="center-content" style="margin-top: 24px; font-size: 24px;">
+							No invitations
+						</div>`;
+				} else {
+					for (const request of friend_requests) {
+						// Put all friend requests into the sheet
+						const button = create_friend_request_button(request, decodeURIComponent(escape(request.name)) + " wants to be your friend");
+						button.addEventListener("click", () => dialog_accept_friend_request(request));
+						sheet.appendChild(button);
+					}
+				}
+			} else {
+				display_snackbar(text);
+			}
+		});
+	});
+
 }
 
 function dialog_accept_friend_request(request) {
@@ -1097,10 +1129,9 @@ function accept_friend_request(request) {
 	get("/acceptfriendrequest", request.id).then(resp => {
 		if (resp.ok) {
 			display_snackbar(`Accepted friend request from ${name}`);
+			populate_contacts_list();
+			check_friend_requests();
 		} else {
-			if (resp.ok) {
-				populate_contacts_list();
-			}
 			resp.text().then(text => {
 				display_snackbar(text);
 			});

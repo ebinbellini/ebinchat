@@ -406,6 +406,13 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	nl := len(signup.Name)
+	if 6 > nl || nl > 20 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Your name has to be between 6 and 20 characters long")
+		return
+	}
+
 	// Hash pasword
 	// BCrypt automatically salts passwords
 	hash, err := bcrypt.GenerateFromPassword([]byte(signup.Password), bcryptCost)
@@ -701,10 +708,11 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	senderID := split[3]
+	recieverID := (*claims)["id"].(string)
 
 	// Check if such a friend request exists
 	query := "SELECT sender FROM friend_requests WHERE reciever=? AND sender=?"
-	rows1, err := sqlDB.Query(query, (*claims)["id"], senderID)
+	rows1, err := sqlDB.Query(query, recieverID, senderID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -719,7 +727,7 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Check if such a friend relationship already exists
 	query = "SELECT id1 FROM friends WHERE (id1=? AND id2=?) OR (id2=? AND id1=?)"
-	rows2, err := sqlDB.Query(query, (*claims)["id"], senderID, (*claims)["id"], senderID)
+	rows2, err := sqlDB.Query(query, recieverID, senderID, recieverID, senderID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -731,25 +739,24 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "You're already friends!")
 
 		// Remove friend request if it exists
-		query = "DELETE FROM friend_requests WHERE (reciever=? AND sender=?) OR (sender=? AND reciever=?)"
-		sqlDB.Exec(query, (*claims)["id"], senderID, (*claims)["id"], senderID)
+		query = "DELETE FROM friend_requests WHERE reciever=? AND sender=?"
+		sqlDB.Exec(query, recieverID, senderID)
 
 		return
 	}
-	// It is now certain that such a request exists
 
 	// Create a friend relationship
 	query = "INSERT INTO friends (id1, id2, created_at) VALUES (?, ?, ?)"
-	_, err = sqlDB.Exec(query, (*claims)["id"], senderID, time.Now())
+	_, err = sqlDB.Exec(query, recieverID, senderID, time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
 		return
 	}
 
-	// Remove friend request if it exists
-	query = "DELETE FROM friend_requests WHERE (reciever=? AND sender=?) OR (sender=? AND reciever=?)"
-	_, err = sqlDB.Exec(query, (*claims)["id"], senderID, (*claims)["id"], senderID)
+	// Remove friend request
+	query = "DELETE FROM friend_requests WHERE reciever=? AND sender=?"
+	_, err = sqlDB.Exec(query, recieverID, senderID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -779,14 +786,14 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	myID, err := strconv.ParseInt((*claims)["id"].(string), 10, 64)
+	recieverIDInt, err := strconv.ParseInt(recieverID, 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err)
 		return
 	}
 
-	err = addUserIDToGroup(myID, chatGroupID)
+	err = addUserIDToGroup(recieverIDInt, chatGroupID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err)
@@ -798,8 +805,6 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, err)
 		return
 	}
-
-	// TODO make the new contact appear in contact list without having to reload
 }
 
 func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
@@ -1138,7 +1143,7 @@ func respondToSearchUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := sqlDB.Query(`SELECT id, name, image FROM users WHERE
-		MATCH(name) AGAINST(?) LIMIT 10`, query)
+		MATCH(name) AGAINST(CONCAT(?, "*") IN BOOLEAN MODE) LIMIT 10`, query)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
