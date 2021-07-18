@@ -1041,6 +1041,27 @@ header .input-container input, header .input-container textarea {
     box-shadow: 0 3px 1px -2px rgba(50, 60, 51, 0.12), 0 2px 2px 0 rgba(70, 88, 73, 0.15), 0 1px 5px 0 rgba(72, 90, 70, 0.14);
 }
 
+.settings-avatar {
+    display: block;
+    margin: 80px auto 16px auto;
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    background-size: cover;
+}
+
+.settings-nametag {
+    margin-top: 12px;
+    font-size: 30px;
+}
+
+#avatar-upload {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
 @media screen and (max-width: 500px) {
     body {
         padding: 48px 16px;

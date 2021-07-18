@@ -2,6 +2,7 @@
 
 let user_email = undefined;
 let user_name = undefined;
+let user_image = undefined;
 let user_id = 0;
 
 let jwt_token = undefined;
@@ -410,7 +411,7 @@ function create_contact_button(data) {
 
 	// Insert other information from server
 	const profile_picture = contact.getElementsByClassName("profile-picture")[0];
-	profile_picture.src = "profilepics/" + data.imageURL;
+	profile_picture.src = data.imageURL;
 
 	const profile_name = contact.getElementsByClassName("profile-name")[0];
 	profile_name.innerText = data.groupName;
@@ -425,7 +426,7 @@ function open_conversation(group_data) {
 	return _ => {
 		close_all_big_windows();
 
-		const big_window = create_big_window(group_data);
+		const big_window = create_conversation_window(group_data);
 
 		// Reversal container to enable automatic resizing of textarea
 		const content = document.createElement("div");
@@ -602,7 +603,7 @@ function send_message(input, group_data) {
 	});
 }
 
-function create_big_window(group_data) {
+function create_conversation_window(group_data) {
 	// Create window
 	const big_window = document.createElement("div");
 	big_window.classList.add("big-window");
@@ -636,19 +637,6 @@ function create_big_window(group_data) {
 	bell.addEventListener("click", () => {
 		const activated = bell.classList.contains("activated");
 		update_notifs_enabled(group_data, !activated, bell);
-		/*const action = activated ? "/unsubscribe/" : "/subscribe/";
-		const response = activated ?
-			"You will no longer receive notifications from this conversation"
-			: "You will now receive notifications from this conversation";
-		get(action, group_data.groupID).then(resp => {
-			if (!resp.ok) {
-				resp.text().then(text => {
-					console.log(text)
-				});
-			} else {
-				display_snackbar(response);
-			}
-		});*/
 	});
 	header.appendChild(bell);
 
@@ -699,7 +687,9 @@ function update_notifs_enabled(group_data, enable, bell) {
 			set_bell_state(group_data, bell);
 		} else {
 			resp.text().then(text => {
-				display_snackbar(text);
+				if (!text.includes("already enabled notifications")) {
+					display_snackbar(text);
+				}
 			});
 		}
 	});
@@ -842,7 +832,7 @@ function set_remove_main_menu_listener() {
 function remove_main_menu(event) {
 	const menu = document.getElementsByClassName("menu")[0];
 
-	if (is_child_of(event.target, menu))
+	if (event && is_child_of(event.target, menu))
 		return;
 
 	if (menu && menu.children[0].classList.contains("displayed")) {
@@ -875,7 +865,8 @@ function show_profile_picture() {
 	get("/profilepicurl").then(response => {
 		if (response.ok) {
 			response.text().then(url => {
-				pic.style.backgroundImage = "url(/profilepics/" + url + ")";
+				user_image = url;
+				pic.style.backgroundImage = `url(${user_image})`;
 			});
 		}
 	});
@@ -896,7 +887,7 @@ function open_main_menu(event) {
 		<a href="/help" class="menu-option">Help</a>
 		<a href="/tos" class="menu-option">Terms of Service</a>
 		<a href="/privacy" class="menu-option">Privacy</a>
-		<div class="menu-option">Settings</div>
+		<div class="menu-option" onclick="open_settings()">Settings</div>
 		<div class="menu-option" onclick="log_out()">Log out</div>`;
 	menu.appendChild(copy);
 
@@ -913,6 +904,86 @@ function open_main_menu(event) {
 			}, 50 + 60 * index)
 		}
 		requestAnimationFrame(init_ripple);
+	});
+}
+
+function open_settings() {
+	remove_main_menu();
+
+	const window = create_settings_window();
+
+	const center = document.createElement("div");
+	center.classList.add("center-content");
+	window.appendChild(center);
+
+	const avatar = document.createElement("div");
+	avatar.classList.add("settings-avatar");
+	avatar.style.backgroundImage = `url(${user_image})`;
+	center.appendChild(avatar);
+
+	center.innerHTML += `
+		<label class="button-flat" for="avatar-upload">
+			Upload image
+		</label>
+
+		<input type="file" id="avatar-upload" name="avatar-upload"
+			accept="image/png, image/jpeg" onchange="upload_profile_pic(this)">
+
+		<div class="settings-nametag">
+			${user_name}
+		</div>
+	`;
+
+	// TODO Change username and email
+	// TODO option to disable notifications for all chat groups
+
+	// Insert window
+	document.body.appendChild(window);
+
+	// Animate insertion
+	requestAnimationFrame(() => {
+		window.classList.add("displayed");
+	});
+}
+
+function create_settings_window() {
+	// Create window
+	const big_window = document.createElement("div");
+	big_window.classList.add("big-window");
+
+	// Add header
+	const header = document.createElement("header");
+	header.innerText = "Settings";
+
+	// Add close button to header
+	const close_button = document.createElement("div");
+	close_button.classList.add("close-button");
+	close_button.innerHTML = `<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 10 10" height="24" width="24">
+		<path style="fill:none;fill-opacity:1;stroke:#212121;stroke-width:1.16947;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="M 1.1393294,1.1377215 8.8622351,8.8622932" id="path833" />
+		<path id="path833-8" d="M 8.8609713,1.1377486 1.1392431,8.86238" style="fill:none;fill-opacity:1;stroke:#212121;stroke-width:1.16938;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+	</svg>`;
+	close_button.addEventListener("click", close_all_big_windows);
+	header.appendChild(close_button);
+
+	// Insert the header
+	big_window.appendChild(header);
+
+	return big_window;
+}
+
+function upload_profile_pic(input) {
+	const data = new FormData();
+	data.append("pic", input.files[0]);
+
+	fetch("/uploadprofilepic/" + jwt_token, {
+		method: "post",
+		body: data
+	}).then(resp => {
+		resp.text().then(text => {
+			if (!resp.ok) {
+				display_snackbar(text);
+			}
+		}) 
 	})
 }
 

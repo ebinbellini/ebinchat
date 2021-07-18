@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -139,6 +140,7 @@ func main() {
 	http.HandleFunc("/validatejwt/", respondToValidateJWT)
 	http.HandleFunc("/profilepics/", respondToProfilePics)
 	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
+	http.HandleFunc("/uploadprofilepic/", respondToUploadProfilePic)
 	http.HandleFunc("/images/", respondToGetImage)
 	http.HandleFunc("/vapid/", respondToGetVapidPublic)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
@@ -426,7 +428,7 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 	// Store user in database
 	// Errors if someone else is using the same email or name
 	query := `INSERT INTO users (email, password, name, image, created_at) VALUES (?, ?, ?, ?, ?);`
-	result, err := sqlDB.Exec(query, signup.Email, signup.Password, signup.Name, "default.svg", time.Now())
+	result, err := sqlDB.Exec(query, signup.Email, signup.Password, signup.Name, "profilepics/default.svg", time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -1607,70 +1609,84 @@ func respondToGetImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/*func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
-	// TODO REPLACE WITH NEW FILE UPLOAD
+func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
-	if len(split) != 4 {
+	if len(split) != 3 {
 		serveBadRequest(w, r)
 		return
 	}
-	roomName, err := url.QueryUnescape(split[2])
-	fileName := split[3]
 
-	path := filepath.Join("images", roomName+"_"+fileName)
-	file, err := os.Create(path)
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "failed to validate")
+		return
+	}
+
+	userID := (*claims)["id"].(string)
+
+	upload, header, err := r.FormFile("pic")
 	if err != nil {
-		fmt.Println("ファイルのアップロード失敗した", err)
-		serveInternalError(w, r)
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "Failed to read image data")
+		return
+	}
+
+	// Max 3 MB
+	if header.Size > 3*1000*1000 {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprintln(w, "Your profile picture can be at most 3 MB (million bytes)")
+		return
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	accepted := []string{
+		"image/jpeg",
+		"image/png",
+		"image/svg",
+		"image/gif",
+		"image/tiff",
+		"image/webp",
+	}
+	ok := false
+	for _, ac := range accepted {
+		if ac == contentType {
+			ok = true
+		}
+	}
+
+	if !ok {
+		fmt.Fprintln(w, "Allowed image types are JPEG, PNG, SVG, GIF, TIFF, & WebP")
+	}
+
+	filename := "profilepics/" + userID
+	file, err := os.Create(filename)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, "Unable to create image file on server")
+		return
 	}
 	defer file.Close()
 
-	room := rooms[roomName]
-	room.ImageCount++
-	// Remove oldest image if the room image limit
-	if room.ImageCount > roomImageLimit {
-		for i := len(room.Messages) - 1; i >= 0; i-- {
-			if room.Messages[i].AttachmentPath != "" {
-				removePath := room.Messages[i].AttachmentPath
-				if strings.HasPrefix(removePath, "images") {
-					err := os.Remove(removePath)
-					if err != nil {
-						fmt.Println(err)
-					} else {
-						room.ImageCount--
-					}
-				}
-			}
-		}
-	}
-
-	bytes := make([]byte, 1024)
-	for {
-		_, err := r.Body.Read(bytes)
-		_, err2 := file.Write(bytes)
-
-		if err == io.EOF {
-			break
-		}
-		if err2 != nil {
-			fmt.Println("ファイルを書くの失敗した", err)
-			break
-		}
-	}
-
-	file.Sync()
-
-	info, err := os.Stat(path)
+	_, err = io.Copy(file, upload)
 	if err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Println(info.ModTime())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, "Unable to write to image file on server")
+		return
 	}
 
-	// Send the path to the created file to the client
-	fmt.Fprint(w, "images/"+roomName+"_"+fileName)
-}*/
+	query := "UPDATE users SET image = ? WHERE id = ?"
+	_, err = sqlDB.Exec(query, filename, userID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, err)
+		return
+	}
+
+	fmt.Fprintln(w, "Your profile picture has been updated")
+}
 
 func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
