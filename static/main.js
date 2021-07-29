@@ -451,17 +451,46 @@ function open_conversation(group_data) {
 		// Container for messages
 		const message_container = document.createElement("div");
 		message_container.className = "messages"
+		message_container.addEventListener("scroll", () => {
+			messages_scrolled(group_data, message_container)
+		});
 		content.appendChild(message_container);
 
 		// Add the reversal container to the big window
 		big_window.appendChild(content);
 
-		display_previous_messages(group_data);
-		await_messages_from_group(group_data, message_container);
+		display_previous_messages(group_data, message_container);
 	};
 }
 
-function display_previous_messages(group_data) {
+function messages_scrolled(group_data, message_container) {
+	if (message_container.scrollTop == 0) {
+		display_earlier_messages(group_data, message_container);
+	}
+}
+
+function display_earlier_messages(group_data, message_container) {
+	const earliest_message = document.querySelector(".big-window.displayed .message-container:last-of-type");
+	if (!earliest_message) return;
+	const earliest_id = earliest_message.id;
+	console.log(earliest_id);
+
+	get("/earliermessages", `${group_data.groupID}/${earliest_id}`).then(resp =>
+		resp.text().then(text => {
+			if (resp.ok) {
+				const messages = base64_json_to_object(text);
+
+				for (const message_data of messages) {
+					const msg_element = create_message_element(message_data);
+					insert_message(msg_element, message_container);
+				}
+			} else {
+				display_snackbar(text);
+			}
+		}));
+}
+
+function display_previous_messages(group_data, message_container) {
 	get("/messages", group_data.groupID).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
@@ -469,17 +498,19 @@ function display_previous_messages(group_data) {
 
 				for (const message_data of messages) {
 					const msg_element = create_message_element(message_data);
-					insert_message(msg_element);
+					insert_message(msg_element, message_container);
 				}
 			} else {
 				display_snackbar(text);
 			}
+
+			// Begin awaiting messages after initial messages have been recieved
+			await_messages_from_group(group_data, message_container);
 		});
 	});
 }
 
-function insert_message(message_element) {
-	const message_list = document.getElementsByClassName("messages")[0];
+function insert_message(message_element, message_list) {
 	const nodes = Array.from(message_list.children);
 	const insert_timestamp = Date.parse(message_element.getAttribute("timestamp"));
 	const insert_msg_id = message_element.getAttribute("id");
@@ -602,25 +633,35 @@ function is_path_to_image(path) {
 	return image_extensions.includes(extension);
 }
 
+let awaiting_messages_controller = null;
 function await_messages_from_group(group_data, message_container) {
 	// Stop awaiting messages when the chat is closed
 	if (message_container.parentNode == null) {
 		return
 	}
 
-	get("/awaitmessages", last_message_id + "/" + group_data.groupID).then(resp => {
+	if (awaiting_messages_controller !== null) {
+		awaiting_messages_controller.abort();
+		awaiting_messages_controller = null;
+	}
+	awaiting_messages_controller = new AbortController();
+
+	fetch(`/awaitmessages/${jwt_token}/${last_message_id}/${group_data.groupID}`, {
+		method: "get",
+		signal: awaiting_messages_controller.signal
+	}).then(resp => {
 		resp.text().then(text => {
-			if (resp.ok) {
+			if (resp.ok && text.length > 0) {
 				const messages = base64_json_to_object(text);
 
 				for (const message_data of messages) {
 					const msg_element = create_message_element(message_data);
-					insert_message(msg_element);
+					insert_message(msg_element, message_container);
 				}
 				// Await more messages
 				await_messages_from_group(group_data, message_container);
 			} else {
-				if (text == "Timeout") {
+				if (text == "Timeout" || text == "") {
 					// Await more messages
 					await_messages_from_group(group_data, message_container);
 				} else {
@@ -628,7 +669,7 @@ function await_messages_from_group(group_data, message_container) {
 				}
 			}
 		});
-	});
+	}).catch(e => {/* Ignore errors that come from aborting the request */ });
 }
 
 function message_input_keydown(group_data) {
@@ -792,6 +833,9 @@ function send_subscription_to_server(subscription, group_data) {
 				display_snackbar("Enabled notifications");
 				push_subscribed = true
 				update_notifs_enabled(group_data, true)
+
+				const bell = document.querySelector(".notif-bell");
+				bell.classList.add("activated");
 			} else {
 				resp.text().then(text => {
 					display_snackbar(text);

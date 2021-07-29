@@ -43,6 +43,7 @@ type Message struct {
 type Listener struct {
 	Writer    http.ResponseWriter
 	Request   *http.Request
+	Done      chan<- bool
 	Name      string
 	UserID    int64
 	Used      bool
@@ -106,7 +107,7 @@ type CreateGroupData struct {
 	Members   []int64 `json:"members"`
 }
 
-const listenerLifetime = 60 * time.Second
+const listenerLifetime = 30 * time.Second
 const messageLimit = 300
 const roomImageLimit = 10
 const roomImageTimeLimit = 48 * time.Hour
@@ -145,6 +146,7 @@ func main() {
 	http.HandleFunc("/vapid/", respondToGetVapidPublic)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
 	http.HandleFunc("/messages/", respondToGetMessages)
+	http.HandleFunc("/earliermessages/", respondToGetEarlierMessages)
 	http.HandleFunc("/uploads/", respondToUploads)
 	http.HandleFunc("/subscribegroup/", respondToSubscribeToGroup)
 	http.HandleFunc("/amisubscribedtogroup/", respondToAmISubscribedToGroup)
@@ -321,11 +323,19 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	}
 	lGroup := listenergroups[groupID]
 
+	done := make(chan bool)
+	listener.Done = done
+
 	lGroup.Listeners = append(lGroup.Listeners, listener)
 
-	for !listener.Used && listener.Expires.After(time.Now()) {
-		time.Sleep(100 * time.Millisecond)
+	// Continue only after the listener expires or is used
+	// This is in order to keep the request alive.
+	timer := time.NewTimer(listenerLifetime)
+	select {
+	case <-timer.C:
+	case <-done:
 	}
+
 	cleanupListeners(lGroup)
 }
 
@@ -1589,6 +1599,71 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func respondToGetEarlierMessages(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 5 {
+		serveBadRequest(w, r)
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "failed to validate")
+		return
+	}
+
+	groupID := split[3]
+
+	// Check if user is in group
+	if !isUserInGroup((*claims)["id"].(string), groupID) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
+
+	earliestMessageID := split[4]
+	fmt.Println("[" + earliestMessageID + "]")
+	earliest, err := strconv.Atoi(earliestMessageID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Invalid message ID")
+		return
+	}
+
+	// Gather the 30 most recent messages before the specified message
+	query := `(SELECT id, sender_id, group_id, text, attachment_path,
+			attachment_size, timestamp
+			FROM messages WHERE group_id=? AND id<?)
+			ORDER BY timestamp DESC LIMIT 30`
+	rows, err := sqlDB.Query(query, groupID, earliest)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+	defer rows.Close()
+
+	messages := []Message{}
+	for rows.Next() {
+		var msg Message
+		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.AttachmentSize, &msg.TimeStamp)
+		if err != nil {
+			fmt.Print(err)
+			return
+		}
+		messages = append(messages, msg)
+	}
+
+	res, err := json.Marshal(messages)
+	if err == nil {
+		json.NewEncoder(w).Encode(res)
+	} else {
+		serveInternalError(w, r)
+	}
+}
+
 func isUserInGroup(userID, groupID string) bool {
 	// Check if the requesting user is in the group he's trying to access
 	query := `SELECT 1 FROM group_members WHERE user_id=? AND group_id=?`
@@ -1874,7 +1949,7 @@ func handleListeners(message *Message) {
 	for _, listener := range listenergroups[message.GroupID].Listeners {
 		// If not used and not expired
 		if !listener.Used && listener.Expires.After(time.Now()) {
-			query := `SELECT id, sender_id, group_id, text, attachment_path, attachment_size timestamp
+			query := `SELECT id, sender_id, group_id, text, attachment_path, attachment_size, timestamp
 				FROM messages WHERE group_id=? AND id>?`
 			rows, err := sqlDB.Query(query, message.GroupID, listener.LastMsgID)
 			if err != nil {
@@ -1906,6 +1981,8 @@ func handleListeners(message *Message) {
 			} else {
 				serveInternalError(listener.Writer, listener.Request)
 			}
+
+			listener.Done <- true
 		}
 	}
 }

@@ -93,7 +93,7 @@
 
 .form-element-field.-hasvalue~.form-element-label,
 .form-element-field:focus~.form-element-label {
-    transform: translateY(-2px) scale(0.9);
+    transform: translateY(-100%) translateY(-2px) scale(0.9);
     cursor: pointer;
     pointer-events: auto;
 }
@@ -124,7 +124,7 @@ textarea.form-element-field:not(:placeholder-shown) {
 
 input.form-element-field:not(:placeholder-shown)~.form-element-label,
 textarea.form-element-field:not(:placeholder-shown)~.form-element-label {
-    transform: translateY(-2px) scale(0.9);
+    transform: translateY(-100%) translateY(-2px) scale(0.9);
     cursor: pointer;
     pointer-events: auto;
 }
