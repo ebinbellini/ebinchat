@@ -478,6 +478,57 @@ header .input-container input, header .input-container textarea {
     color: rgba(0, 0, 0, 0);
 }
 
+.attachment-chip {
+    width: 100%;
+    line-height: 64px;
+    height: 0;
+    overflow: hidden;
+    transition: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.attachment-chip.displayed {
+    height: 64px;
+}
+
+.attachment-preview {
+    width: 48px;
+    height: 48px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    float: left;
+    margin: 8px;
+}
+
+.attachment-name {
+    max-width: calc(100% - 178px);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    float: left;
+    margin-right: 8px;
+}
+
+.attachment-size {
+    color: #999;
+    float: left;
+}
+
+.message-container.from-me .attachment-size {
+    color: #ccc;
+}
+
+.attachment-action {
+    float: right;
+    padding: 8px 16px 0 16px;
+    cursor: pointer;
+}
+
+.attachment-action img {
+    height: 24px;
+    width: 24px;
+}
+
 .subtitle {
     color: #577a66;
     text-transform: uppercase;
@@ -1041,6 +1092,26 @@ header .input-container input, header .input-container textarea {
     box-shadow: 0 3px 1px -2px rgba(50, 60, 51, 0.12), 0 2px 2px 0 rgba(70, 88, 73, 0.15), 0 1px 5px 0 rgba(72, 90, 70, 0.14);
 }
 
+
+.message .message-image {
+    width: 300px;
+    max-width: 72vw;
+    display: block;
+    margin: 4px 0;
+}
+
+.message .attachment {
+    display: block;
+    width: 300px;
+    max-width: calc(100vw - 48px);
+    line-height: 64px;
+    cursor: pointer;
+}
+
+.message .attachment-preview {
+    margin-left: 0;
+}
+
 .settings-avatar {
     display: block;
     margin: 80px auto 16px auto;
@@ -1055,10 +1126,13 @@ header .input-container input, header .input-container textarea {
     font-size: 30px;
 }
 
-#avatar-upload {
+input[type="file"] {
+    display: inline;
+    padding: 0;
     opacity: 0;
     width: 0;
     height: 0;
+    position: absolute;
     overflow: hidden;
 }
 

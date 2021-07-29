@@ -34,7 +34,8 @@ type Message struct {
 	SenderID       string    `json:"senderID"`
 	GroupID        string    `json:"groupID"`
 	Text           string    `json:"text"`
-	AttachmentPath string    `json:"path"`
+	AttachmentPath string    `json:"attachment"`
+	AttachmentSize int64     `json:"attachment_size"`
 	TimeStamp      time.Time `json:"timestamp"`
 }
 
@@ -141,16 +142,15 @@ func main() {
 	http.HandleFunc("/profilepics/", respondToProfilePics)
 	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
 	http.HandleFunc("/uploadprofilepic/", respondToUploadProfilePic)
-	http.HandleFunc("/images/", respondToGetImage)
 	http.HandleFunc("/vapid/", respondToGetVapidPublic)
 	http.Handle("/awaitmessages/", http.TimeoutHandler(awaitMessageHandler{}, listenerLifetime, "Timeout"))
 	http.HandleFunc("/messages/", respondToGetMessages)
+	http.HandleFunc("/uploads/", respondToUploads)
 	http.HandleFunc("/subscribegroup/", respondToSubscribeToGroup)
 	http.HandleFunc("/amisubscribedtogroup/", respondToAmISubscribedToGroup)
 	http.HandleFunc("/subscribepush/", respondToSubscribePush)
 	http.HandleFunc("/updatepush/", respondToUpdatePush)
-
-	//http.HandleFunc("/uploadfile/", respondToUploadFile)
+	http.HandleFunc("/uploadfile/", respondToUploadFile)
 
 	fmt.Println("1337のポートを待機しています...")
 	err := http.ListenAndServe(":1337", nil)
@@ -222,6 +222,7 @@ func openMySQLDatabase() {
 		group_id INT,
 		text VARCHAR(1024),
 		attachment_path VARCHAR(64),
+		attachment_size INT,
 		timestamp DATETIME,
 		PRIMARY KEY (id)`)
 
@@ -271,7 +272,7 @@ func (handler awaitMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -450,7 +451,7 @@ func respondToSignUp(w http.ResponseWriter, r *http.Request) {
 	/*cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
 	http.SetCookie(w, cookie)
 	fmt.Fprint(w, "Success! ▼・ᴥ・▼")*/
-	fmt.Fprintln(w, token)
+	fmt.Fprint(w, token)
 }
 
 func respondToLogIn(w http.ResponseWriter, r *http.Request) {
@@ -503,8 +504,8 @@ func respondToLogIn(w http.ResponseWriter, r *http.Request) {
 	// Expires after 31 days (one month)
 	/*cookie := &http.Cookie{Name: "auth", Value: token, Expires: time.Now().Add(authTokenLifetime), Path: "/"}
 	http.SetCookie(w, cookie)
-	fmt.Fprintln(w, "Authenticated!")*/
-	fmt.Fprintln(w, token)
+	fmt.Fprint(w, "Authenticated!")*/
+	fmt.Fprint(w, token)
 }
 
 func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
@@ -520,13 +521,13 @@ func respondToSendFriendRequest(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
 	recieverID, err := url.QueryUnescape(split[3])
 	if err != nil {
-		fmt.Fprintln(w, err)
+		fmt.Fprint(w, err)
 		return
 	}
 	senderID := (*claims)["id"].(string)
@@ -862,7 +863,7 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 			&gd.LastMessage, &gd.LastEventTime, &gd.CreatedAt)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintln(w, err)
+			fmt.Fprint(w, err)
 			return
 		}
 		if groupName.Valid {
@@ -877,7 +878,7 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 			err := row1.Scan(&id)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintln(w, err)
+				fmt.Fprint(w, err)
 				return
 			}
 			gd.GroupName, gd.ImageURL = getUserNameAndImage(id)
@@ -993,7 +994,7 @@ func respondToFetchGroupData(w http.ResponseWriter, r *http.Request) {
 		&gd.LastMessage, &gd.LastEventTime, &gd.CreatedAt)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, err)
+		fmt.Fprint(w, err)
 		return
 	}
 	if groupName.Valid {
@@ -1008,7 +1009,7 @@ func respondToFetchGroupData(w http.ResponseWriter, r *http.Request) {
 		err := row1.Scan(&id)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintln(w, err)
+			fmt.Fprint(w, err)
 			return
 		}
 		gd.GroupName, gd.ImageURL = getUserNameAndImage(id)
@@ -1036,7 +1037,7 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1046,7 +1047,7 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&groupData)
 	if err != nil {
 		serveBadRequest(w, r)
-		fmt.Fprintln(w, "failed to decode group data")
+		fmt.Fprint(w, "failed to decode group data")
 		return
 	}
 
@@ -1199,6 +1200,23 @@ func respondToProfilePics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+func respondToUploads(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Path
+	fp := strings.TrimPrefix(strings.ReplaceAll(filepath.Clean(url), "\\", "/"), "/")
+
+	_, err := os.Stat(fp)
+	if err == nil {
+		// Serve picture
+		http.ServeFile(w, r, fp)
+	} else {
+		if os.IsNotExist(err) {
+			fp = filepath.Join("static", "imgs", "removed.png")
+			http.ServeFile(w, r, fp)
+		} else {
+			serveInternalError(w, r)
+		}
+	}
+}
 
 func respondToProfilePicURL(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
@@ -1277,7 +1295,7 @@ func respondToAmISubscribedToGroup(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1289,7 +1307,7 @@ func respondToAmISubscribedToGroup(w http.ResponseWriter, r *http.Request) {
 		ans = "はい"
 	}
 
-	fmt.Fprintln(w, ans)
+	fmt.Fprint(w, ans)
 }
 
 // Returns true if the user is subscribed to the group
@@ -1313,7 +1331,7 @@ func respondToSubscribeToGroup(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1375,7 +1393,7 @@ func respondToSubscribePush(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1527,7 +1545,7 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1541,8 +1559,9 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Gather the 30 most recent messages
-	query := `(SELECT id, sender_id, group_id, text, attachment_path, timestamp
-				FROM messages WHERE group_id=?)
+	query := `(SELECT id, sender_id, group_id, text, attachment_path,
+			attachment_size, timestamp
+			FROM messages WHERE group_id=?)
 			ORDER BY timestamp DESC LIMIT 30`
 	rows, err := sqlDB.Query(query, groupID)
 	if err != nil {
@@ -1554,7 +1573,7 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	messages := []Message{}
 	for rows.Next() {
 		var msg Message
-		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.TimeStamp)
+		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.AttachmentSize, &msg.TimeStamp)
 		if err != nil {
 			fmt.Print(err)
 			return
@@ -1585,30 +1604,6 @@ func isUserInGroup(userID, groupID string) bool {
 	return true
 }
 
-func respondToGetImage(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Path
-	file := filepath.Join("images/", strings.Split(url, "/")[2])
-	info, err := os.Stat(file)
-	if err == nil {
-		http.ServeFile(w, r, file)
-		// Remove image if it is old
-		if (info.ModTime().Add(roomImageTimeLimit)).Before(time.Now()) {
-			err := os.Remove(file)
-			if err != nil {
-				fmt.Println("写真を削除できませんでした", err)
-			}
-		}
-	} else {
-		if os.IsNotExist(err) {
-			// Respond with an image saying that the previous image was removed
-			noImage := filepath.Join("static", "imgs", "removed.png")
-			http.ServeFile(w, r, noImage)
-		} else {
-			serveInternalError(w, r)
-		}
-	}
-}
-
 func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
@@ -1621,7 +1616,7 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1630,14 +1625,14 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	upload, header, err := r.FormFile("pic")
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "Failed to read image data")
+		fmt.Fprint(w, "Failed to read image data")
 		return
 	}
 
 	// Max 3 MB
 	if header.Size > 3*1000*1000 {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "Your profile picture can be at most 3 MB (million bytes)")
+		fmt.Fprint(w, "Your profile picture can be at most 3 MB (million bytes).")
 		return
 	}
 
@@ -1658,14 +1653,14 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ok {
-		fmt.Fprintln(w, "Allowed image types are JPEG, PNG, SVG, GIF, TIFF, & WebP")
+		fmt.Fprint(w, "Allowed image types are JPEG, PNG, SVG, GIF, TIFF, & WebP")
 	}
 
 	filename := "profilepics/" + userID
 	file, err := os.Create(filename)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, "Unable to create image file on server")
+		fmt.Fprint(w, "Unable to create image file on server")
 		return
 	}
 	defer file.Close()
@@ -1673,7 +1668,7 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(file, upload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, "Unable to write to image file on server")
+		fmt.Fprint(w, "Unable to write to image file on server")
 		return
 	}
 
@@ -1681,19 +1676,18 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	_, err = sqlDB.Exec(query, filename, userID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, err)
+		fmt.Fprint(w, err)
 		return
 	}
 
-	fmt.Fprintln(w, "Your profile picture has been updated")
+	fmt.Fprint(w, "Your profile picture has been updated.")
 }
 
-func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
+func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
 	if len(split) != 3 {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(w, "Wrong number of parameters for request")
+		serveBadRequest(w, r)
 		return
 	}
 
@@ -1701,7 +1695,60 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	claims := validateJWTClaims(tokenString)
 	if claims == nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprintln(w, "failed to validate")
+		fmt.Fprint(w, "failed to validate")
+		return
+	}
+
+	userID := (*claims)["id"].(string)
+
+	upload, header, err := r.FormFile("pic")
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Failed to read image data")
+		return
+	}
+
+	// Max 30 MB
+	if header.Size > 30*1000*1000 {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "Your file can be at most 30 MB (million bytes).")
+		return
+	}
+
+	filename := userID + "_" + header.Filename
+	location := "uploads/" + filename
+	file, err := os.Create(location)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, upload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Unable to write to file on server")
+		return
+	}
+
+	fmt.Fprint(w, filename)
+}
+
+func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Wrong number of parameters for request")
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "failed to validate")
 		return
 	}
 
@@ -1711,8 +1758,25 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&message)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(w, err)
+		fmt.Fprint(w, err)
 		return
+	}
+
+	var attachmentSize int64 = 0
+
+	if message.AttachmentPath != "" {
+		filepath := "uploads/" + message.AttachmentPath
+		attachmentStat, err := os.Stat(filepath)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, "Invalid attachment ", message.AttachmentPath)
+			return
+		}
+
+		attachmentSize = attachmentStat.Size()
+
+		message.AttachmentPath = "/uploads/" + message.AttachmentPath
 	}
 
 	message.SenderID = (*claims)["id"].(string)
@@ -1720,7 +1784,7 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	groupID, err := strconv.ParseInt(message.GroupID, 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(w, "このデータはおかしいです普通ではないです")
+		fmt.Fprint(w, "このデータはおかしいです普通ではないです")
 		return
 	}
 
@@ -1729,7 +1793,7 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	if len(message.Text) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintln(w, "Message is empty")
+		fmt.Fprint(w, "Your message is empty.")
 		return
 	}
 
@@ -1745,18 +1809,18 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	if !rows.Next() {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "A group with id "+message.GroupID+" does not exist")
+		fmt.Fprint(w, "A group with id "+message.GroupID+" does not exist.")
 		return
 	}
 
 	if !isUserInGroup(message.SenderID, strconv.FormatInt(groupID, 10)) {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "You're not in that group")
+		fmt.Fprint(w, "You're not in that group.")
 		return
 	}
 
-	query = "INSERT INTO messages (sender_id, group_id, text, attachment_path, timestamp) VALUES (?, ?, ?, ?, ?)"
-	_, err = sqlDB.Exec(query, (*claims)["id"], groupID, message.Text, "", time.Now())
+	query = "INSERT INTO messages (sender_id, group_id, text, attachment_path, attachment_size, timestamp) VALUES (?, ?, ?, ?, ?, ?)"
+	_, err = sqlDB.Exec(query, (*claims)["id"], groupID, message.Text, message.AttachmentPath, attachmentSize, time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -1810,8 +1874,8 @@ func handleListeners(message *Message) {
 	for _, listener := range listenergroups[message.GroupID].Listeners {
 		// If not used and not expired
 		if !listener.Used && listener.Expires.After(time.Now()) {
-			query := `SELECT id, sender_id, group_id, text, attachment_path, timestamp
-				FROM messages WHERE group_id=? AND id>=?`
+			query := `SELECT id, sender_id, group_id, text, attachment_path, attachment_size timestamp
+				FROM messages WHERE group_id=? AND id>?`
 			rows, err := sqlDB.Query(query, message.GroupID, listener.LastMsgID)
 			if err != nil {
 				fmt.Print(err)
@@ -1822,7 +1886,8 @@ func handleListeners(message *Message) {
 			messages := []Message{}
 			for rows.Next() {
 				var msg Message
-				err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID, &msg.Text, &msg.AttachmentPath, &msg.TimeStamp)
+				err := rows.Scan(&msg.ID, &msg.SenderID, &msg.GroupID,
+					&msg.Text, &msg.AttachmentPath, &msg.AttachmentSize, &msg.TimeStamp)
 				if err != nil {
 					fmt.Print(err)
 					return

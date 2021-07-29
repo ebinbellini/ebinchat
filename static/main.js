@@ -402,6 +402,8 @@ function create_contact_button(data) {
 		</svg>
 	</div>`;
 
+	// TODO remove friend/leave group via dots
+
 	// Define what to do when clicked
 	contact.addEventListener("click", open_conversation(data));
 
@@ -533,11 +535,71 @@ function create_message_element(message_data) {
 
 	const message = document.createElement("div");
 	message.classList.add("message");
+
+	if (message_data.attachment != "") {
+		const attachment = create_attachment_component(message_data);
+		message.appendChild(attachment);
+	}
+
 	// Change to correct encoding
-	message.innerText = window.decodeURIComponent(window.escape(message_data.text));
+	const text = window.decodeURIComponent(window.escape(message_data.text));
+	const text_node = document.createTextNode(text);
+	message.appendChild(text_node);
+
+	// Insert message
 	message_container.appendChild(message);
 
 	return message_container;
+}
+
+function create_attachment_component(data) {
+	const path = data.attachment;
+	const is_image = is_path_to_image(path);
+
+	if (is_image) {
+		const img = document.createElement("img");
+		img.src = path;
+		img.classList.add("message-image");
+		// TODO onclick open image
+		return img;
+	} else {
+		const attachment = document.createElement("a");
+		attachment.classList.add("attachment");
+		attachment.href = path;
+		attachment.setAttribute("download", "");
+
+		// Should the icons be black or white?
+		const white = user_id == data.senderID;
+
+		const file_icon = white ? "file white.svg" : "file.svg";
+		const download_icon = white ? "download white.svg" : "download.svg";
+
+		attachment.innerHTML = `
+			<div class="attachment-preview"
+				style="background-image: url('/icons/${file_icon}')"></div>
+			<div class="attachment-name"></div>
+			<div class="attachment-size"></div>
+			<div class="attachment-action">
+				<img src="/icons/${download_icon}">
+			</div>`;
+		attachment.children[1].innerText = path;
+
+		const size = Math.round(parseInt(data.attachment_size) / 100000) / 10;
+		attachment.children[2].innerText = size + " MB";
+
+		return attachment;
+	}
+}
+
+function is_path_to_image(path) {
+	const image_extensions = [
+		"bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "tif", "tiff", "webp"
+	];
+
+	const split = path.split(".");
+	const extension = split[split.length - 1];
+
+	return image_extensions.includes(extension);
 }
 
 function await_messages_from_group(group_data, message_container) {
@@ -582,6 +644,13 @@ function message_input_keydown(group_data) {
 }
 
 function send_message(input, group_data) {
+	const attachment = input.parentNode.querySelector(".attachment-chip.displayed");
+	let attachment_path = null;
+	if (attachment) {
+		attachment_path = attachment.getAttribute("path");
+		remove_all_attachments();
+	}
+
 	// TODO MAX TEXT SIZE 1024 8-bit characters
 	fetch("/sendmessage/" + jwt_token, {
 		method: 'POST',
@@ -590,7 +659,8 @@ function send_message(input, group_data) {
 		},
 		body: JSON.stringify({
 			text: input.value,
-			groupID: group_data.groupID
+			groupID: group_data.groupID,
+			attachment: attachment_path,
 		})
 	}).then(resp => {
 		if (resp.ok) {
@@ -909,6 +979,7 @@ function open_main_menu(event) {
 
 function open_settings() {
 	remove_main_menu();
+	close_all_big_windows();
 
 	const window = create_settings_window();
 
@@ -927,7 +998,8 @@ function open_settings() {
 		</label>
 
 		<input type="file" id="avatar-upload" name="avatar-upload"
-			accept="image/png, image/jpeg" onchange="upload_profile_pic(this)">
+			accept="image/jpeg, image/png, image/svg, image/gif, image/tiff, image/webp"
+			onchange="upload_profile_pic(this)">
 
 		<div class="settings-nametag">
 			${user_name}
@@ -983,8 +1055,8 @@ function upload_profile_pic(input) {
 			if (!resp.ok) {
 				display_snackbar(text);
 			}
-		}) 
-	})
+		});
+	});
 }
 
 function set_action_center_listeners() {
@@ -1489,33 +1561,37 @@ function create_a_search_bar(purpose, icon) {
 }
 
 function create_a_textarea() {
-	// Create search bar element
+	// Create a container
 	const container = document.createElement("div");
 	container.classList.add("input-container");
 
-	// Add content to search bar
+	// Add content to the container
 	container.innerHTML = `<textarea placeholder="Type a message"></textarea>
-		<img class="input-icon" src="icons/clip.svg">
+
+		<input type="file" id="file-upload" name="file-upload"
+			onchange="upload_chat_file(this)">
+
+		<label for="file-upload">
+			<img class="input-icon" src="icons/clip.svg">
+		</label>
 		<img class="send-button" src="icons/airplane.svg">`;
 
 	const textarea = container.children[0];
 
-	textarea.addEventListener("input", event => {
+	textarea.addEventListener("input", _ => {
 		window.setTimeout(() => {
-			/*  Without this the size only changes by one lineheight per activation
-				and behaves weird in other ways. */
+			/*  Without this the size only changes by one line-height per
+				activation and behaves weird in other ways. */
 			textarea.style.height = 'auto';
 			const lines = textarea.value.split("\n").length;
 			const line_height = 20;
 			const text_height = 7 + lines * line_height;
-			// Fit text but take up at most half of the screen
+			// Try to fit all text but take up at most half of the screen
 			const height = Math.min(text_height, window.innerHeight / 2);
 			textarea.style.height = height + "px";
-			//console.log(height);
 		}, 50);
 	});
 
-	// Assumes that the textarea is inserted quickly
 	requestAnimationFrame(() => {
 		requestAnimationFrame(() => {
 			textarea.style.height = textarea.scrollHeight + "px";
@@ -1523,6 +1599,63 @@ function create_a_textarea() {
 	});
 
 	return container;
+}
+
+function upload_chat_file(input) {
+	const data = new FormData();
+	data.append("pic", input.files[0]);
+
+	display_snackbar("Uploading your file...");
+
+	fetch(`/uploadfile/${jwt_token}`, {
+		method: "post",
+		body: data
+	}).then(resp => {
+		resp.text().then(text => {
+			if (resp.ok) {
+				insert_attachment_chip(input, text);
+			} else {
+				display_snackbar(text);
+			}
+		});
+	});
+}
+
+function insert_attachment_chip(input, path) {
+	remove_all_attachments();
+
+	const file = input.files[0];
+	const attachment = document.createElement("div");
+	attachment.classList.add("attachment-chip");
+	attachment.setAttribute("path", path)
+
+	const url = URL.createObjectURL(file);
+	const size = Math.round(parseInt(file.size) / 100000) / 10;
+
+	attachment.innerHTML = `
+		<div class="attachment-preview" style="background-image: url(${url})"></div>
+		<div class="attachment-name">${file.name}</div>
+		<div class="attachment-size">${size} MB</div>
+		<div class="attachment-action" onclick="remove_all_attachments()">
+			<img src="/icons/x.svg">
+		</div>
+	`;
+
+	const node = input.parentNode.appendChild(attachment);
+
+	requestAnimationFrame(() =>
+		requestAnimationFrame(() =>
+			node.classList.add("displayed")
+		)
+	);
+}
+
+function remove_all_attachments() {
+	const attachments = document.getElementsByClassName("attachment-chip");
+	for (const a of attachments) {
+		a.classList.remove("displayed");
+		setTimeout(() => a.remove(), 200);
+	}
 }
 
 function trim_enters(string) {

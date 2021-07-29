@@ -125,7 +125,6 @@ self.addEventListener('notificationclick', event => {
 		console.log("Not implemented");
 	} else {
 		// If the user clicked on open or notification body
-		// TODO messages instead of URLs
 		const url = data.Action == "fren" ?
 			// Friend requst
 			`/?fren_requests`
