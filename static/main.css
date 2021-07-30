@@ -834,6 +834,12 @@ header .input-container input, header .input-container textarea {
     color: #121212;
 }
 
+.contact-container .menu {
+    position: absolute;
+    padding-top: 12px;
+    z-index: 21;
+}
+
 #cookie-banner {
     position: fixed;
     bottom: -163px;
@@ -931,8 +937,7 @@ header .input-container input, header .input-container textarea {
     transform: scale(1);
 }
 
-.big-window .close-button,
-.big-window .notif-bell {
+.big-window header > * {
     position: absolute;
     top: 0;
     left: 0;
@@ -944,10 +949,15 @@ header .input-container input, header .input-container textarea {
     z-index: 10;
 }
 
-.big-window .notif-bell {
+.big-window .notif-bell,
+.big-window .lock-icon {
     left: unset;
     right: 0;
     transform: unset;
+}
+
+.big-window .lock-icon {
+    right: 40px;
 }
 
 .big-window .notif-bell svg rect:last-of-type {
@@ -963,13 +973,11 @@ header .input-container input, header .input-container textarea {
     transform: translateY(-12px);
 }
 
-.big-window .close-button:hover,
-.big-window .notif-bell:hover {
+.big-window header > *:hover {
     transform: scale(1.1);
 }
 
-.big-window .close-button:active,
-.big-window .notif-bell:active {
+.big-window header > *:hover {
     transform: scale(0.9);
 }
 
@@ -1074,6 +1082,10 @@ header .input-container input, header .input-container textarea {
     padding: 2px;
     box-sizing: border-box;
     clear: both;
+}
+
+.big-window .messages .message-container:last-child {
+    padding-top: 8px;
 }
 
 .big-window .messages .message-container .message {

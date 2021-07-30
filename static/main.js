@@ -393,7 +393,8 @@ function create_contact_button(data) {
 			<div class="profile-name"></div>
 			<div class="last-message"></div>
 		</div>
-		<svg class="dots ripple" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
+		<svg class="dots ripple"
+			xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg"
 			version="1.1" viewBox="0 0 6.35 6.35" height="24" width="24">
 			<ellipse ry="0.31523806" rx="0.31523785" cy="1.1906251" cx="3.175"				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
 			<ellipse
@@ -401,6 +402,9 @@ function create_contact_button(data) {
 			<ellipse ry="0.31523806" rx="0.31523785" cy="5.1593752" cx="3.175"				style="fill:#484848;fill-opacity:1;stroke:#484848;stroke-width:0.957024;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke" />
 		</svg>
 	</div>`;
+
+	contact.querySelector(".dots").addEventListener("click",
+		event => open_contact_menu(event, contact, data));
 
 	// TODO remove friend/leave group via dots
 
@@ -424,9 +428,61 @@ function create_contact_button(data) {
 	return contact;
 }
 
+function open_contact_menu(event, contact, group_data) {
+	event.stopPropagation();
+
+	const menu = document.createElement("div");
+	menu.classList.add("menu");
+	menu.innerHTML += `<div class="menu-option">Leave conversation</div>`;
+
+	const leave = menu.children[0];
+	if (group_data.isDirect) {
+		leave.innerText = "Unfriend";
+	}
+
+	leave.addEventListener("click", event => {
+		event.stopPropagation();
+		leave_group(contact, group_data);
+	});
+
+	contact.appendChild(menu);
+
+	requestAnimationFrame(() => {
+		menu.classList.add("displayed");
+		for (const index of Array(menu.children.length).keys()) {
+			const option = menu.children[index];
+			option.classList.add("ripple");
+			setTimeout(() => {
+				option.classList.add("displayed");
+			}, 50 + 60 * index)
+		}
+		requestAnimationFrame(init_ripple);
+	});
+}
+
+function leave_group(contact, group_data) {
+	get("/leavegroup", group_data.groupID).then(resp => {
+		if (resp.ok) {
+			const msg = group_data.isDirect ? 
+				"You are no longer friends"
+				:"You have now left the conversation"
+			display_snackbar(msg);
+			contact.remove();
+		} else {
+			resp.text().then(text => {
+				display_snackbar(text);
+			});
+		}
+	});
+}
+
 function open_conversation(group_data) {
 	return _ => {
 		close_all_big_windows();
+
+		const url = new URL(window.location);
+		url.searchParams.set("group_id", group_data.groupID);
+		window.history.pushState({}, window.title, url);
 
 		const big_window = create_conversation_window(group_data);
 
@@ -473,7 +529,6 @@ function display_earlier_messages(group_data, message_container) {
 	const earliest_message = document.querySelector(".big-window.displayed .message-container:last-of-type");
 	if (!earliest_message) return;
 	const earliest_id = earliest_message.id;
-	console.log(earliest_id);
 
 	get("/earliermessages", `${group_data.groupID}/${earliest_id}`).then(resp =>
 		resp.text().then(text => {
@@ -744,7 +799,6 @@ function create_conversation_window(group_data) {
 		<rect transform="rotate(-35)" ry="0.077817149" y="4.3833895" x="-2.7801442" height="0.31083247" width="6.993731" id="rect856" style="fill:#000000;fill-opacity:1;stroke:#f5f5f5;stroke-width:0.621666;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill" />
 	</svg>`
 	set_bell_state(group_data, bell);
-
 	bell.addEventListener("click", () => {
 		const activated = bell.classList.contains("activated");
 		update_notifs_enabled(group_data, !activated, bell);
@@ -845,6 +899,10 @@ function send_subscription_to_server(subscription, group_data) {
 }
 
 function close_all_big_windows() {
+	const url = new URL(window.location);
+	url.searchParams.delete("group_id");
+	window.history.pushState({}, window.title, url);
+
 	const big_windows = document.getElementsByClassName("big-window");
 	for (const window of big_windows) {
 		window.classList.remove("displayed");
@@ -1390,7 +1448,7 @@ function create_friend_request_button(user_info, hint) {
 	const button = document.createElement("div");
 	button.classList.add("contact-container");
 	button.innerHTML = `<div class="contact ripple">
-			<img class="profile-picture" src="/imgs/jocke.jpg">
+			<img class="profile-picture">
 			<div class="profile-name"></div>
 			<div class="last-message"></div>
 		</div>`;
@@ -1398,10 +1456,13 @@ function create_friend_request_button(user_info, hint) {
 	// Insert data
 	button.setAttribute("data-id", user_info.id);
 
-	const hintbox = button.getElementsByClassName("last-message")[0];
+	const profile_pic = button.querySelector(".profile-picture");
+	profile_pic.src = user_info.image;
+
+	const hintbox = button.querySelector(".last-message");
 	hintbox.innerText = hint;
 
-	const nametag = button.getElementsByClassName("profile-name")[0];
+	const nametag = button.querySelector(".profile-name");
 	nametag.innerText = name;
 
 	return button;

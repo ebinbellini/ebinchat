@@ -139,6 +139,7 @@ func main() {
 	http.HandleFunc("/fetchfriendlist/", respondToFetchFriendList)
 	http.HandleFunc("/fetchgroupdata/", respondToFetchGroupData)
 	http.HandleFunc("/creategroup/", respondToCreateGroup)
+	http.HandleFunc("/leavegroup/", respondToLeaveGroup)
 	http.HandleFunc("/validatejwt/", respondToValidateJWT)
 	http.HandleFunc("/profilepics/", respondToProfilePics)
 	http.HandleFunc("/profilepicurl/", respondToProfilePicURL)
@@ -778,7 +779,7 @@ func respondToAcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Create a chat
 	query = "INSERT INTO chat_groups (image, is_direct, message_count, last_message, last_event_time, created_at) VALUES (?, ?, 0, ?, ?, ?)"
-	result, err := sqlDB.Exec(query, "default.svg", true, "New friend!", time.Now(), time.Now())
+	result, err := sqlDB.Exec(query, "profilepics/default.svg", true, "New friend!", time.Now(), time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -921,9 +922,11 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := (*claims)["id"]
+
 	// Fetch the IDs of all friends of the user
 	query := "SELECT id1, id2 FROM friends WHERE id1=? OR id2=?"
-	rows, err := sqlDB.Query(query, (*claims)["id"], (*claims)["id"])
+	rows, err := sqlDB.Query(query, userID, userID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -943,7 +946,7 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if strconv.Itoa(id1) == (*claims)["id"] {
+		if strconv.Itoa(id1) == userID {
 			friendIDs = append(friendIDs, id2)
 		} else {
 			friendIDs = append(friendIDs, id1)
@@ -955,6 +958,7 @@ func respondToFetchFriendList(w http.ResponseWriter, r *http.Request) {
 	for _, id := range friendIDs {
 		pui := PublicUserInfo{}
 		pui.Name, pui.Image = getUserNameAndImage(id)
+		pui.ID = id
 		profiles = append(profiles, pui)
 	}
 
@@ -1063,7 +1067,7 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	// Create a chat
 	query := "INSERT INTO chat_groups (group_name, image, is_direct, message_count, last_message, last_event_time, created_at) VALUES (?, ?, ?, 0, ?, ?, ?)"
-	result, err := sqlDB.Exec(query, groupData.GroupName, "default.svg", false, "New group, say hi!", time.Now(), time.Now())
+	result, err := sqlDB.Exec(query, groupData.GroupName, "profilepics/default.svg", false, "New group, say hi!", time.Now(), time.Now())
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err)
@@ -1106,7 +1110,120 @@ func respondToCreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Respond with success
-	fmt.Fprint(w, "指指指みんなの指を食べちゃう")
+	fmt.Fprint(w, "指指指、みんなの指を食べちゃう")
+}
+
+func respondToLeaveGroup(w http.ResponseWriter, r *http.Request) {
+	requestURL := r.URL.Path
+	split := strings.Split(requestURL, "/")
+	if len(split) != 4 {
+		serveBadRequest(w, r)
+		return
+	}
+
+	tokenString := split[2]
+	claims := validateJWTClaims(tokenString)
+	if claims == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "failed to validate")
+		return
+	}
+
+	groupID := split[3]
+	userID := (*claims)["id"].(string)
+
+	// Check if user is in group
+	if !isUserInGroup(userID, groupID) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "You're not in that group")
+		return
+	}
+
+	query := "SELECT is_direct FROM chat_groups WHERE id=?"
+	var is_direct bool
+	err := sqlDB.QueryRow(query, groupID).Scan(&is_direct)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	if is_direct {
+		// This is a direct conversation, therefore we unfriend
+		unfriendUsers(groupID, w, r)
+		return
+	} else {
+		// Remove user from the group
+		query = "DELETE FROM group_members WHERE user_id=? AND group_id=?"
+		_, err = sqlDB.Exec(query, userID, groupID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err)
+			return
+		}
+
+		// Check if anybody remains in the group
+		query = "SELECT 1 FROM group_members WHERE user_id=? AND group_id=?"
+		var epin int64
+		err = sqlDB.QueryRow(query, userID, groupID).Scan(&epin)
+		if epin != 1 {
+			// The group is empty
+			query = "DELETE FROM chat_groups WHERE id=?"
+			_, err = sqlDB.Exec(query, groupID)
+			if err != nil {
+				fmt.Fprint(w, "Unable to remove group")
+				return
+			}
+		}
+	}
+}
+
+func unfriendUsers(groupID string, w http.ResponseWriter, r *http.Request) {
+	// Find the IDs of the friends
+	query := "SELECT user_id FROM group_members WHERE group_id=?"
+	rows, err := sqlDB.Query(query, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+	defer rows.Close()
+
+	// Store the user IDs
+	var id1, id2 int
+	rows.Next()
+	_ = rows.Scan(&id1)
+	rows.Next()
+	_ = rows.Scan(&id2)
+
+	// Unfriend
+	query = "DELETE FROM friends WHERE (id1=? AND id2=?) OR (id2=? AND id1=?)"
+	_, err = sqlDB.Exec(query, id1, id2, id1, id2)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Remove them from their conversation
+	query = "DELETE FROM group_members WHERE group_id=?"
+	_, err = sqlDB.Exec(query, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// Remove their conversation
+	query = "DELETE FROM chat_groups WHERE id=?"
+	_, err = sqlDB.Exec(query, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
+
+	// TODO remove all messages, and also when removing regular conversationss
 }
 
 func addUserIDToGroup(userID, chatID int64) error {
@@ -1625,7 +1742,6 @@ func respondToGetEarlierMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	earliestMessageID := split[4]
-	fmt.Println("[" + earliestMessageID + "]")
 	earliest, err := strconv.Atoi(earliestMessageID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

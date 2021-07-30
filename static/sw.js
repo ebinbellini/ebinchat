@@ -1,3 +1,5 @@
+// Cache disabled during development
+
 /*const CACHE = "バージョン第一";
 // How long user-created images are stored (in seconds)
 const IMAGE_CACHE_TIME = 2 * 24 * 60 * 60 // Two days
@@ -82,9 +84,7 @@ self.addEventListener('push', event => {
 });
 
 async function handlePush(event) {
-	console.log(`[Service Worker] Push had this data: "${event.data.text()}"`);
 	const data = JSON.parse(event.data.text())
-
 
 	// Check if a window is already focused
 	// So that we only send notifications when in background
