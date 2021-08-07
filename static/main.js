@@ -597,11 +597,11 @@ function insert_message(message_element, message_list) {
 	const insert_timestamp = Date.parse(message_element.getAttribute("timestamp"));
 	const insert_msg_id = message_element.getAttribute("id");
 
-	// Check for duplicates
+	// Check for duplicates, return if one is found
 	if (
 		nodes.find(node =>
 			node.getAttribute("id") == insert_msg_id
-		) != undefined
+		) !== undefined
 	) return;
 
 	// Update last message time
@@ -615,6 +615,7 @@ function insert_message(message_element, message_list) {
 		return b_t - a_t;
 	});
 
+
 	/* 	Below: Insert the messages in reverse order
 		because the message container is reversed
 	*/
@@ -627,6 +628,19 @@ function insert_message(message_element, message_list) {
 			// Found an older message. Insert before it.
 			message_list.insertBefore(message_element, node);
 			return;
+		}
+	}
+
+	const newest = sorted[sorted.length - 1];
+	if (newest !== undefined) {
+		const newest_timestamp = Date.parse(newest.getAttribute("timestamp"));
+
+		// Calculate difference in seconds
+		const diff = (newest_timestamp - insert_timestamp) / 1000;
+
+		// If the difference is less than 3 minutes, put them together
+		if (diff < 3 * 60) {
+			message_element.classList.add("close-to-last");
 		}
 	}
 
@@ -798,7 +812,6 @@ function send_message(input, group_data) {
 		}
 	}
 
-	// TODO MAX TEXT SIZE 1024 8-bit characters
 	fetch("/sendmessage/" + jwt_token, {
 		method: 'POST',
 		headers: {
@@ -940,8 +953,8 @@ function open_encryption_dialog(group_id) {
 
 function save_encryption_password(password, group_id) {
 	// Salt password with group ID
-	console.log(password+group_id);
-	const res = generate_block(password+group_id);
+	console.log(password + group_id);
+	const res = generate_block(password + group_id);
 	if (res[0] === "1") {
 		// Store hashed encryption key
 		localStorage.setItem("E2EEK" + group_id, res.slice(1));
