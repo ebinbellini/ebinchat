@@ -1169,11 +1169,20 @@ func respondToLeaveGroup(w http.ResponseWriter, r *http.Request) {
 		var epin int64
 		err = sqlDB.QueryRow(query, userID, groupID).Scan(&epin)
 		if epin != 1 {
-			// The group is empty
+			// The group is empty, delete it
 			query = "DELETE FROM chat_groups WHERE id=?"
 			_, err = sqlDB.Exec(query, groupID)
 			if err != nil {
 				fmt.Fprint(w, "Unable to remove group")
+				return
+			}
+
+			// Delete all messages in the group
+			query = "DELETE FROM messages WHERE group_id=?"
+			_, err = sqlDB.Exec(query, groupID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, err)
 				return
 			}
 		}
@@ -1225,7 +1234,14 @@ func unfriendUsers(groupID string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO remove all messages, and also when removing regular conversationss
+	// Delete all messages
+	query = "DELETE FROM messages WHERE group_id=?"
+	_, err = sqlDB.Exec(query, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
+		return
+	}
 }
 
 func addUserIDToGroup(userID, chatID int64) error {

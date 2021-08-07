@@ -414,8 +414,6 @@ function create_contact_button(data) {
 	contact.querySelector(".dots").addEventListener("click",
 		event => open_contact_menu(event, contact, data));
 
-	// TODO remove friend/leave group via dots
-
 	// Define what to do when clicked
 	contact.addEventListener("click", open_conversation(data));
 
@@ -815,7 +813,12 @@ function send_message(input, group_data) {
 			input.value = "";
 		} else {
 			resp.text().then(text => {
-				display_snackbar("Could not send message. " + text);
+				if (text.includes("too long")) {
+					// TODO word counter in input
+					display_snackbar("Your message can be at most 1024 bytes long.");
+				} else {
+					display_snackbar("Could not send message. " + text);
+				}
 			});
 		}
 	});
@@ -906,18 +909,19 @@ function open_encryption_dialog(group_id) {
 	const cancel_button = accept_button.cloneNode();
 	cancel_button.innerText = "Cancel";
 
-	const input = document.createElement("div")
-	input.setAttribute("class", "form-element form-input")
-	input.innerHTML = `<input id="encryption-password" class="form-element-field"
+	const input_container = document.createElement("div")
+	input_container.setAttribute("class", "form-element form-input")
+	input_container.innerHTML = `<input id="encryption-password" class="form-element-field"
 				placeholder="Type anything" type="password"
 				required />
 			<div class="form-element-bar"></div>
 			<label class="form-element-label"
 				for="login-password">Password</label>`;
-	dialog.appendChild(input);
+	dialog.appendChild(input_container);
 
 	// Define button functionality
 	accept_button.addEventListener("click", () => {
+		const input = input_container.querySelector("input");
 		save_encryption_password(input.value, group_id);
 		remove_small_dialog(dialog);
 	});
@@ -934,7 +938,9 @@ function open_encryption_dialog(group_id) {
 }
 
 function save_encryption_password(password, group_id) {
-	const res = generate_block(password);
+	// Salt password with group ID
+	console.log(password+group_id);
+	const res = generate_block(password+group_id);
 	if (res[0] === "1") {
 		// Store hashed encryption key
 		localStorage.setItem("E2EEK" + group_id, res.slice(1));

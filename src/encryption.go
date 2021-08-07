@@ -4,11 +4,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha512"
 	"encoding/base64"
 	"io"
 	"syscall/js"
-
-	"golang.org/x/crypto/blake2b"
 )
 
 const nonceSize int = 12
@@ -17,22 +16,16 @@ var block cipher.Block = nil
 
 // Generates a block for use with subsequent calls to encryptMessage and decryptMessage
 func generateBlock(_this js.Value, args []js.Value) interface{} {
-	// TODO salt password with group id
-
-	// TODO Password has to be < 32 bytes
 	password := []byte(args[0].String())
 
 	// Generating a key requires exactly 32 bytes of data
-	hash, err := blake2b.NewXOF(32, password)
-	if err != nil {
-		return "0" + err.Error()
-	}
+	// This hashes anything to 32 bytes
+	hash := sha512.Sum512_256(password)
 
-	key, err := io.ReadAll(hash)
-	if err != nil {
-		return "0" + err.Error()
-	}
+	// Convert [32]byte to []byte
+	key := hash[:]
 
+	var err error
 	block, err = aes.NewCipher(key)
 	if err != nil {
 		return "0" + err.Error()
