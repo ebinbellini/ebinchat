@@ -431,7 +431,22 @@ function create_contact_button(data) {
 	profile_name.innerText = data.groupName;
 
 	const last_message = contact.getElementsByClassName("last-message")[0];
-	last_message.innerText = data.lastMessage;
+	let last_message_text = data.lastMessage;
+
+	// Decrypt if possible
+	const key = localStorage.getItem("E2EEK" + data.groupID);
+	if (key !== null) {
+		const res = generate_block_from_key(key);
+		if (res[0] === "1") {
+			const dec = decrypt_message(last_message_text);
+			if (dec[0] === "1") {
+				last_message_text = dec.slice(1);
+			}
+		}
+	}
+
+	last_message_text = last_message_text.split("\n")[0];
+	last_message.innerText = `${data.lastMessageSender}: ${last_message_text}`;
 
 	return contact;
 }
@@ -980,6 +995,8 @@ async function request_notification_permission(group_data) {
 	}).then(subscription => {
 		console.log('User is subscribed:', subscription);
 		send_subscription_to_server(subscription, group_data);
+	}).catch(e => {
+		display_snackbar("Unable to register push notification subscription. Check your connection!")
 	});
 }
 

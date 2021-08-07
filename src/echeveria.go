@@ -92,13 +92,14 @@ type SignupFields struct {
 
 // GroupData The group data sent to the user
 type GroupData struct {
-	GroupID       string    `json:"groupID"`
-	GroupName     string    `json:"groupName"`
-	ImageURL      string    `json:"imageURL"`
-	IsDirect      bool      `json:"isDirect"`
-	LastMessage   string    `json:"lastMessage"`
-	LastEventTime time.Time `json:"lastEventTime"`
-	CreatedAt     time.Time `json:"createdAt"`
+	GroupID           string    `json:"groupID"`
+	GroupName         string    `json:"groupName"`
+	ImageURL          string    `json:"imageURL"`
+	IsDirect          bool      `json:"isDirect"`
+	LastMessage       string    `json:"lastMessage"`
+	LastMessageSender string    `json:"lastMessageSender"`
+	LastEventTime     time.Time `json:"lastEventTime"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 // CreateGroupData The data required to create a group
@@ -211,6 +212,7 @@ func openMySQLDatabase() {
 		is_direct BOOLEAN,
 		message_count INT,
 		last_message VARCHAR(60) NOT NULL,
+		last_message_sender VARCHAR(25),
 		last_event_time DATETIME,
 		created_at DATETIME,
 		PRIMARY KEY (id)`)
@@ -864,14 +866,14 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 	groupDatas := []GroupData{}
 	for _, groupID := range groupIDs {
 		row := sqlDB.QueryRow(`SELECT id, group_name, image, is_direct,
-			last_message, last_event_time, created_at
+			last_message, last_message_sender, last_event_time, created_at
 			FROM chat_groups WHERE id=?`, groupID)
 
 		gd := GroupData{}
 		groupName := sql.NullString{}
 
 		err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
-			&gd.LastMessage, &gd.LastEventTime, &gd.CreatedAt)
+			&gd.LastMessage, &gd.LastMessageSender, &gd.LastEventTime, &gd.CreatedAt)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprint(w, err)
@@ -998,14 +1000,14 @@ func respondToFetchGroupData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	row := sqlDB.QueryRow(`SELECT id, group_name, image, is_direct,
-		last_message, last_event_time, created_at
+		last_message, last_message_sender, last_event_time, created_at
 		FROM chat_groups WHERE id=?`, groupID)
 
 	gd := GroupData{}
 	groupName := sql.NullString{}
 
 	err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
-		&gd.LastMessage, &gd.LastEventTime, &gd.CreatedAt)
+		&gd.LastMessage, &gd.LastMessageSender, &gd.LastEventTime, &gd.CreatedAt)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err)
@@ -2029,18 +2031,23 @@ func respondToSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Truncate the last message and say who it is from
 	name := getUserName(message.SenderID)
-	last_message := name + ": " + message.Text
-	if len(last_message) > 55 {
-		last_message = last_message[0:55] + "…"
-	}
+	last_message := message.Text
 
 	// Update last_message field
 	query = "UPDATE chat_groups SET last_message = ? WHERE id = ?"
 	_, err = sqlDB.Exec(query, last_message, groupID)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err)
-		fmt.Println(err)
+		return
+	}
+
+	// Update last_message field
+	query = "UPDATE chat_groups SET last_message_sender = ? WHERE id = ?"
+	_, err = sqlDB.Exec(query, name, groupID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err)
 		return
 	}
 
