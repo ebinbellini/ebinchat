@@ -876,7 +876,7 @@ header .input-container input, header .input-container textarea {
     right: 0;
     bottom: 0;
     margin: auto;
-    width: 256px;
+    width: 264px;
     border-radius: 8px;
     max-width: 95vw;
     font-size: 18px;
@@ -913,6 +913,12 @@ header .input-container input, header .input-container textarea {
 
 .dialog .button, .dialog .button-flat {
     float: right;
+}
+
+.dialog p {
+    padding-top: 8px;
+    font-size: 14px;
+    color: #474747;
 }
 
 .big-window {
@@ -1089,6 +1095,7 @@ header .input-container input, header .input-container textarea {
 }
 
 .big-window .messages .message-container .message {
+    max-width: calc(100% - 32px);
     padding: 4px 8px;
     background: #ffffffba;
     border-radius: 8px;
@@ -1099,15 +1106,15 @@ header .input-container input, header .input-container textarea {
 
 .big-window .messages .message-container.from-me .message {
     float: right;
-    background: #6f9a7f;
-    color: #fafafa;
+    background: #afd5bd;
+    color: #121212;
     box-shadow: 0 3px 1px -2px rgba(50, 60, 51, 0.12), 0 2px 2px 0 rgba(70, 88, 73, 0.15), 0 1px 5px 0 rgba(72, 90, 70, 0.14);
 }
 
 
 .message .message-image {
     width: 300px;
-    max-width: 72vw;
+    max-width: 100%;
     display: block;
     margin: 4px 0;
 }

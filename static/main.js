@@ -1,21 +1,20 @@
 "use strict";
 
+// User data
 let user_email = undefined;
 let user_name = undefined;
 let user_image = undefined;
 let user_id = 0;
 
-let jwt_token = undefined;
+// Permissions and registrations
 let cookies_ok = false;
-
 let push_subscribed = false;
 let sw_registration = null;
 
+// Other data
+let jwt_token = undefined;
 let friend_requests = [];
-let history = [];
-let history_index = 0;
 let last_message_id = 0;
-
 
 /*const commands = [
 	{ name: "help", func: help, arg: "none", info: "Displays a list of commands.", extended: "Type /help command to get in depth info about a command." },
@@ -34,6 +33,14 @@ function main() {
 	check_cookies_allowed();
 	init_ripple();
 	register_service_worker();
+	load_wasm();
+}
+
+function load_wasm() {
+	const go = new Go();
+	WebAssembly.instantiateStreaming(fetch("encryption.wasm"), go.importObject).then(result => {
+		go.run(result.instance);
+	});
 }
 
 function register_service_worker() {
@@ -307,12 +314,13 @@ function display_logged_in_ui() {
 	check_friend_requests();
 	populate_contacts_list();
 
-	// Do actions specified in query string
-	follow_directions_in_query_string();
 
 	setTimeout(show_main, 100);
 	setTimeout(() => {
 		login.style.display = "none";
+
+		// Do actions specified in query string
+		follow_directions_in_query_string();
 	}, 250);
 }
 
@@ -463,9 +471,9 @@ function open_contact_menu(event, contact, group_data) {
 function leave_group(contact, group_data) {
 	get("/leavegroup", group_data.groupID).then(resp => {
 		if (resp.ok) {
-			const msg = group_data.isDirect ? 
+			const msg = group_data.isDirect ?
 				"You are no longer friends"
-				:"You have now left the conversation"
+				: "You have now left the conversation"
 			display_snackbar(msg);
 			contact.remove();
 		} else {
@@ -478,6 +486,12 @@ function leave_group(contact, group_data) {
 
 function open_conversation(group_data) {
 	return _ => {
+		// Check if an encryption key is stored for this group
+		const key = localStorage.getItem("E2EEK" + group_data.groupID);
+		if (key !== null) {
+			const res = generate_block_from_key(key);
+		}
+
 		close_all_big_windows();
 
 		const url = new URL(window.location);
@@ -583,8 +597,8 @@ function insert_message(message_element, message_list) {
 
 	// Sort with the newest messages first
 	const sorted = nodes.sort((a, b) => {
-		const a_t = Date.parse(a.getAttribute("timestamp"));
-		const b_t = Date.parse(b.getAttribute("timestamp"));
+		const a_t = parseInt(a.id);
+		const b_t = parseInt(b.id);
 		return b_t - a_t;
 	});
 
@@ -628,7 +642,18 @@ function create_message_element(message_data) {
 	}
 
 	// Change to correct encoding
-	const text = window.decodeURIComponent(window.escape(message_data.text));
+	let text = window.decodeURIComponent(window.escape(message_data.text));
+
+	// Attempt decryption if a key exists
+	const key = localStorage.getItem("E2EEK" + message_data.groupID);
+	if (key !== null) {
+		const decrypted = decrypt_message(text);
+		if (decrypted[0] === "1") {
+			text = decrypted.slice(1);
+		} else {
+		}
+	}
+
 	const text_node = document.createTextNode(text);
 	message.appendChild(text_node);
 
@@ -747,6 +772,18 @@ function send_message(input, group_data) {
 		remove_all_attachments();
 	}
 
+	let text = input.value;
+	const key = localStorage.getItem("E2EEK" + group_data.groupID);
+	if (key !== null) {
+		text = encrypt_message(text);
+		if (text[0] === "1") {
+			text = text.slice(1);
+		} else {
+			display_snackbar("Unable to encrypt message. " + text.slice(1));
+			return;
+		}
+	}
+
 	// TODO MAX TEXT SIZE 1024 8-bit characters
 	fetch("/sendmessage/" + jwt_token, {
 		method: 'POST',
@@ -754,7 +791,7 @@ function send_message(input, group_data) {
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify({
-			text: input.value,
+			text: text,
 			groupID: group_data.groupID,
 			attachment: attachment_path,
 		})
@@ -805,6 +842,19 @@ function create_conversation_window(group_data) {
 	});
 	header.appendChild(bell);
 
+	// Add a lock icon to the header
+	const lock = document.createElement("div");
+	lock.classList.add("lock-icon");
+	lock.innerHTML = `<svg xmlns:dc="http://purl.org/dc/elements/1.1/" width="24" height="24" viewBox="0 0 6.3499998 6.3499998" version="1.1">
+		<rect ry="0.19480665" y="2.6192415" x="0.90070337" height="3.3909822" width="4.548593" style="fill:#ffffff;fill-opacity:0;stroke:#000000;stroke-width:0.341312;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+		<path sodipodi:open="true" d="M 3.4659087,4.417679 A 0.56885415,0.56715912 0 0 1 3.7261772,5.0453535 0.56885415,0.56715912 0 0 1 3.1959926,5.4718378 0.56885415,0.56715912 0 0 1 2.6357021,5.0855032 0.56885415,0.56715912 0 0 1 2.8488282,4.440399" sodipodi:arc-type="arc" sodipodi:end="4.1017589" sodipodi:start="5.2491955" sodipodi:ry="0.56715912" sodipodi:rx="0.56885415" sodipodi:cy="4.9050651" sodipodi:cx="3.175" sodipodi:type="arc" style="fill:#ffffff;fill-opacity:0;stroke:#000000;stroke-width:0.341312;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+		<path sodipodi:nodetypes="cccccc" d="m 2.8660538,4.440399 -0.00181,-0.8960808 c 0,0 0.0036,-0.1409649 0.1496484,-0.1402861 0.1140074,-0.00242 0.3408059,-6.612e-4 0.3408059,-6.612e-4 0,0 0.1264703,-0.00792 0.1293933,0.1353263 0.00292,0.1432398 0.00111,0.9017195 0.00111,0.9017195" style="fill:none;stroke:#000000;stroke-width:0.341312;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+		<path sodipodi:nodetypes="cc" id="path851" d="m 1.7549358,2.5908576 c -0.00573,-2.31291758 2.8405944,-2.30550335 2.8401367,0.00546" style="fill:none;stroke:#000000;stroke-width:0.341312;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+	</svg>
+	`
+	lock.addEventListener("click", _ => open_encryption_dialog(group_data.groupID));
+	header.appendChild(lock);
+
 	// Insert the header
 	big_window.appendChild(header);
 
@@ -817,6 +867,66 @@ function create_conversation_window(group_data) {
 	});
 
 	return big_window;
+}
+
+function open_encryption_dialog(group_id) {
+	// Create a dialog
+	const dialog = create_small_dialog();
+	dialog.innerText = `Enter your encryption password`;
+
+	dialog.innerHTML = `
+		Enter group's E2EE password
+		<p>
+			This password is used to encrypt text messages you send in this
+			conversation, but not images or other files. You will only be able
+			to communicate if everyone else in the conversation uses the same
+			password. Leave empty to disable.
+		</p>
+		<div style="margin-top: 16px"></div>`;
+
+	// Create buttons
+	const accept_button = document.createElement("div");
+	accept_button.className = "button-flat";
+	accept_button.innerText = "Confirm";
+	const cancel_button = accept_button.cloneNode();
+	cancel_button.innerText = "Cancel";
+
+	const input = document.createElement("div")
+	input.setAttribute("class", "form-element form-input")
+	input.innerHTML = `<input id="encryption-password" class="form-element-field"
+				placeholder="Type anything" type="password"
+				required />
+			<div class="form-element-bar"></div>
+			<label class="form-element-label"
+				for="login-password">Password</label>`;
+	dialog.appendChild(input);
+
+	// Define button functionality
+	accept_button.addEventListener("click", () => {
+		save_encryption_password(input.value, group_id);
+		remove_small_dialog(dialog);
+	});
+	cancel_button.addEventListener("click", () => {
+		remove_small_dialog(dialog);
+	});
+
+	// Insert said buttons
+	dialog.appendChild(accept_button);
+	dialog.appendChild(cancel_button);
+
+	// Show the dialog
+	display_small_dialog(dialog);
+}
+
+function save_encryption_password(password, group_id) {
+	const res = generate_block(password);
+	if (res[0] === "1") {
+		// Store hashed encryption key
+		localStorage.setItem("E2EEK" + group_id, res.slice(1));
+		display_snackbar("Succesfully created encryption key");
+	} else {
+		display_snackbar("Unable to create encryption keys. " + res.slice(1));
+	}
 }
 
 function set_bell_state(group_data, bell) {
@@ -1154,7 +1264,9 @@ function upload_profile_pic(input) {
 		body: data
 	}).then(resp => {
 		resp.text().then(text => {
-			if (!resp.ok) {
+			if (resp.ok) {
+				display_snackbar("Your new profile picture has been uploaded and will be visible soon.");
+			} else {
 				display_snackbar(text);
 			}
 		});

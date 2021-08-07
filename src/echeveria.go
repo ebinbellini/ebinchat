@@ -1689,7 +1689,7 @@ func respondToGetMessages(w http.ResponseWriter, r *http.Request) {
 	query := `(SELECT id, sender_id, group_id, text, attachment_path,
 			attachment_size, timestamp
 			FROM messages WHERE group_id=?)
-			ORDER BY timestamp DESC LIMIT 30`
+			ORDER BY id DESC LIMIT 30`
 	rows, err := sqlDB.Query(query, groupID)
 	if err != nil {
 		fmt.Print(err)
@@ -1753,7 +1753,7 @@ func respondToGetEarlierMessages(w http.ResponseWriter, r *http.Request) {
 	query := `(SELECT id, sender_id, group_id, text, attachment_path,
 			attachment_size, timestamp
 			FROM messages WHERE group_id=? AND id<?)
-			ORDER BY timestamp DESC LIMIT 30`
+			ORDER BY id DESC LIMIT 30`
 	rows, err := sqlDB.Query(query, groupID, earliest)
 	if err != nil {
 		fmt.Print(err)
@@ -2151,7 +2151,11 @@ func sendNotificationToUser(text string, recieverID int, action, title, topic, i
 		return
 	}
 	subscription := webpush.Subscription{}
-	json.Unmarshal([]byte(subscriptionJSON), &subscription)
+	err = json.Unmarshal([]byte(subscriptionJSON), &subscription)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	// Build the notification payload
 	notifContents := &NotificationContents{
@@ -2187,6 +2191,4 @@ func sendNotificationToUser(text string, recieverID int, action, title, topic, i
 		fmt.Println(err)
 		fmt.Println(string(res))
 	}
-
-	//fmt.Println("通知を送信できました。いいね！", resp.Status)
 }

@@ -1,0 +1,1 @@
+tinygo build -o static/encryption.wasm -target wasm ./src/encryption.go
