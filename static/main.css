@@ -1086,9 +1086,6 @@ header .input-container input, header .input-container textarea {
     flex-direction: column-reverse;
 }
 
-/*  TODO put the messages toghether if time difference is
-    less than 2 minutes */
-
 .big-window .messages .message-container {
     width: 100%;
     padding: 4px 0 6px 0;
