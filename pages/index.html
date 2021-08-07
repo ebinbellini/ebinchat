@@ -39,14 +39,14 @@
 
 <body>
 	<h1 id="app-title">Echeveria</h1>
-	<img id="app-logo" src="icons/EcheveriaLogga.png" />
+	<img id="app-logo" src="icons/EcheveriaLogga.png" alt="Echeveria logo" />
 	<section id="auth-form-container">
 		<form id="login" onsubmit="return submit_login_form()">
 			<h2 style="padding-bottom: 16px;">Log in</h2>
 			<div class="form-element form-input">
 				<input id="login-email" class="form-element-field"
 					placeholder="Type your email, bucko" type="input"
-					required />
+					autocomplete="email" required />
 				<div class="form-element-bar"></div>
 				<label class="form-element-label"
 					for="login-email">Email</label>
@@ -55,7 +55,7 @@
 			<div class="form-element form-input">
 				<input id="login-password" class="form-element-field"
 					placeholder="Any format you want" type="password"
-					required />
+					autocomplete="current-password" required />
 				<div class="form-element-bar"></div>
 				<label class="form-element-label"
 					for="login-password">Password</label>
@@ -85,7 +85,7 @@
 			<div class="form-element form-input">
 				<input id="email" class="form-element-field"
 					placeholder="Type your email, bucko" type="email"
-					required />
+					autocomplete="email" required />
 				<div class="form-element-bar"></div>
 				<label class="form-element-label" for="email">Email</label>
 			</div>
@@ -93,7 +93,7 @@
 			<div class="form-element form-input">
 				<input id="password" class="form-element-field"
 					placeholder="Any format you want" type="password"
-					required />
+					autocomplete="new-password" required />
 				<div class="form-element-bar"></div>
 				<label class="form-element-label"
 					for="password">Password</label>
@@ -129,7 +129,7 @@
 	<main>
 		<header>
 			<div class="header-content">
-				<img class="title-logo" src="icons/ELK tjocc.png" />
+				<img class="title-logo" src="icons/ELK tjocc.png" alt="Echeveria title logo/>
 				<div class="title">Echeveria</div>
 				<div class="my-profile-pic"></div>
 

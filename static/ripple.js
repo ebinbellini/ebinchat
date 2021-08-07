@@ -121,7 +121,7 @@ function init_ripple() {
 		element.addEventListener("touchstart", event => {
 			if ('ontouchstart' in document.documentElement)
 				ripple_event_handler(event);
-		});
+		}, passive_supported ? {passive: true} : false);
 
 		// Delete ripple if the mouse leaves the container
 		element.addEventListener("mouseleave", event => {

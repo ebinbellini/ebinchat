@@ -56,6 +56,7 @@ main.obscured {
 
 main header {
     height: 170px;
+    position: -webkit-sticky;
     position: sticky;
     top: 0;
     background: linear-gradient(45deg, #56856a, #f2f2de);
@@ -238,8 +239,10 @@ label {
     border-radius: 4px;
     transition: 200ms;
     cursor: pointer;
-    user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
     -moz-user-select: -moz-none;
+    user-select: none;
     text-align: center;
     font-weight: 700;
 }
@@ -706,6 +709,7 @@ header .input-container input, header .input-container textarea {
     top: 42px;
     left: 0;
     right: 0;
+    width: -moz-fit-content;
     width: fit-content;
     text-align: center;
     margin: auto;
@@ -724,6 +728,7 @@ header .input-container input, header .input-container textarea {
     box-shadow: 0 0 50px -10px rgba(0, 0, 0, 0.2);
     background: linear-gradient(90deg, #f1f1f1, #e0e0e0);
     opacity: 0.9;
+    -webkit-backdrop-filter: blur(2px);
     backdrop-filter: blur(2px);
     color: #484848;
     z-index: 8;
@@ -881,6 +886,7 @@ header .input-container input, header .input-container textarea {
     max-width: 95vw;
     font-size: 18px;
     background: #fafafaaa;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
     opacity: 0;
     height: fit-content;
@@ -1101,6 +1107,7 @@ header .input-container input, header .input-container textarea {
     border-radius: 8px;
     float: left;
     box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .12), 0 2px 2px 0 rgba(0, 0, 0, .08), 0 1px 5px 0 rgba(0, 0, 0, .06);
+    width: -moz-fit-content;
     width: fit-content;
     word-break: break-all;
 }

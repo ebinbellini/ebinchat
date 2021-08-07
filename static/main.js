@@ -397,7 +397,7 @@ function create_contact_button(data) {
 	contact.classList.add("contact-container");
 
 	contact.innerHTML = `<div class="contact ripple">
-			<img class="profile-picture" src="profilepics/default.svg">
+			<img class="profile-picture" src="profilepics/default.svg" alt="Contact profile picture">
 			<div class="profile-name"></div>
 			<div class="last-message"></div>
 		</div>
@@ -768,8 +768,9 @@ function await_messages_from_group(group_data, message_container) {
 function message_input_keydown(group_data) {
 	return event => {
 		const input = event.target;
-		// TODO enter on mobile should not send
-		if (!event.shiftKey && event.code == "Enter") {
+
+		// Only send if enter is pressed and shift is held
+		if (event.code == "Enter" && (event.shiftKey || event.ctrlKey)) {
 			if (input.value.length > 0) {
 				send_message(input, group_data);
 			}
@@ -1583,7 +1584,7 @@ function create_friend_request_button(user_info, hint) {
 	const button = document.createElement("div");
 	button.classList.add("contact-container");
 	button.innerHTML = `<div class="contact ripple">
-			<img class="profile-picture">
+			<img class="profile-picture" alt="User profile picture">
 			<div class="profile-name"></div>
 			<div class="last-message"></div>
 		</div>`;
