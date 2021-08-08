@@ -1,3 +1,7 @@
+importScripts("wasm_exec.js");
+
+let encryption_keys = {};
+
 // Cache disabled during development
 
 /*const CACHE = "バージョン第一";
@@ -61,10 +65,6 @@ async function respond(event) {
 	}
 }
 
-self.addEventListener("install", event => {
-	event.waitUntil(precache());
-});
-
 function precache() {
 	caches.open(CACHE).then(cache =>
 		cache.addAll([
@@ -78,6 +78,28 @@ function precache() {
 			"imgs/ank.gif",
 		]));
 }*/
+
+self.addEventListener("install", event => {
+	const go = new Go();
+	WebAssembly.instantiateStreaming(fetch("encryption.wasm"), go.importObject).then(result => {
+		go.run(result.instance);
+	});
+
+	// Cache disabled during development
+	//event.waitUntil(precache());
+});
+
+self.addEventListener("message", message => {
+	const data = message.data;
+
+	console.log(message);
+	console.log(data.subject)
+
+	console.log(data.subject === "E2EEK")
+	if (data.subject === "E2EEK") {
+		encryption_keys[data.name] = data.value;
+	}
+});
 
 self.addEventListener('push', event => {
 	event.waitUntil(handlePush(event));
@@ -106,14 +128,31 @@ async function handlePush(event) {
 		: [{ action: 'open', title: 'Open chat' },
 		{ action: 'mute', title: 'Mute' }]
 
-	const title = data.Title;
+
+	let text = data.Text;
+	
+	// Try to decrypt
+	if (data.Action != "fren") {
+		const group_id = data.Action;
+		const key = encryption_keys["E2EEK" + group_id];
+		if (key) {
+			const res = generate_block_from_key(key);
+			if (res[0] === "1") {
+				const dec = decrypt_message(text);
+				if (dec[0] === "1") {
+					text = dec.slice(1);
+				}
+			}
+		}
+	}
+
 	const options = {
-		body: data.Text,
+		body: text,
 		actions: actions,
 		data: data
 	};
 
-	return self.registration.showNotification(title, options);
+	return self.registration.showNotification(data.Title, options);
 }
 
 self.addEventListener('notificationclick', event => {

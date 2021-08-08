@@ -46,7 +46,7 @@ function load_wasm() {
 function register_service_worker() {
 	if ("serviceWorker" in navigator) {
 		navigator.serviceWorker.register("/sw.js").then(registration => {
-			sw_registration = registration
+			sw_registration = registration;
 			check_if_notifs_are_enabled();
 		});
 	}
@@ -955,10 +955,23 @@ function save_encryption_password(password, group_id) {
 	// Salt password with group ID
 	const res = generate_block(password + group_id);
 	if (res[0] === "1") {
+
 		// Store hashed encryption key
-		localStorage.setItem("E2EEK" + group_id, res.slice(1));
-		display_snackbar("Succesfully created encryption key");
+		const key_name = "E2EEK" + group_id;
+		const key = res.slice(1)
+		localStorage.setItem(key_name, key);
+
+		// Decrypt already displayed messages
 		decrypt_messages();
+
+		// Send encryption key to service worker
+		sw_registration.active.postMessage({
+			subject: "E2EEK",
+			name: key_name,
+			value: key
+		});
+
+		display_snackbar("Succesfully created encryption key");
 	} else {
 		display_snackbar("Unable to create encryption keys. " + res.slice(1));
 	}
