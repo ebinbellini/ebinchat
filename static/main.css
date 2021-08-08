@@ -1107,6 +1107,7 @@ header .input-container input, header .input-container textarea {
     width: -moz-fit-content;
     width: fit-content;
     word-break: break-all;
+    white-space: pre-wrap;
 }
 
 .big-window .messages .message-container.from-me .message {

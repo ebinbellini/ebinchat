@@ -953,14 +953,24 @@ function open_encryption_dialog(group_id) {
 
 function save_encryption_password(password, group_id) {
 	// Salt password with group ID
-	console.log(password + group_id);
 	const res = generate_block(password + group_id);
 	if (res[0] === "1") {
 		// Store hashed encryption key
 		localStorage.setItem("E2EEK" + group_id, res.slice(1));
 		display_snackbar("Succesfully created encryption key");
+		decrypt_messages();
 	} else {
 		display_snackbar("Unable to create encryption keys. " + res.slice(1));
+	}
+}
+
+function decrypt_messages() {
+	const messages = document.getElementsByClassName("message");
+	for (const m of messages) {
+		const dec = decrypt_message(m.innerText);
+		if (dec[0] === "1") {
+			m.innerText = dec.slice(1);
+		}
 	}
 }
 
