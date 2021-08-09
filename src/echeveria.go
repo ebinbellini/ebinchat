@@ -871,9 +871,10 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 
 		gd := GroupData{}
 		groupName := sql.NullString{}
+		sender := sql.NullString{}
 
 		err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
-			&gd.LastMessage, &gd.LastMessageSender, &gd.LastEventTime, &gd.CreatedAt)
+			&gd.LastMessage, &sender, &gd.LastEventTime, &gd.CreatedAt)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprint(w, err)
@@ -881,6 +882,9 @@ func respondToFetchContactList(w http.ResponseWriter, r *http.Request) {
 		}
 		if groupName.Valid {
 			gd.GroupName = groupName.String
+		}
+		if sender.Valid {
+			gd.LastMessageSender = sender.String
 		}
 
 		// If the group is direct, fetch the user data instead
@@ -1005,9 +1009,10 @@ func respondToFetchGroupData(w http.ResponseWriter, r *http.Request) {
 
 	gd := GroupData{}
 	groupName := sql.NullString{}
+	sender := sql.NullString{}
 
 	err := row.Scan(&gd.GroupID, &groupName, &gd.ImageURL, &gd.IsDirect,
-		&gd.LastMessage, &gd.LastMessageSender, &gd.LastEventTime, &gd.CreatedAt)
+		&gd.LastMessage, &sender, &gd.LastEventTime, &gd.CreatedAt)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, err)
@@ -1015,6 +1020,9 @@ func respondToFetchGroupData(w http.ResponseWriter, r *http.Request) {
 	}
 	if groupName.Valid {
 		gd.GroupName = groupName.String
+	}
+	if sender.Valid {
+		gd.LastMessageSender = sender.String
 	}
 
 	// If the group is direct, fetch the user data instead
