@@ -1831,21 +1831,22 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 
 	userID := (*claims)["id"].(string)
 
-	upload, header, err := r.FormFile("pic")
+	cl := r.Header.Get("Content-Length")
+	size, err := strconv.Atoi(cl)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, "Failed to read image data")
+		fmt.Fprint(w, "Unable to read the size of your image")
 		return
 	}
 
 	// Max 3 MB
-	if header.Size > 3*1000*1000 {
+	if size > 3*1000*1000 {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, "Your profile picture can be at most 3 MB (million bytes).")
 		return
 	}
 
-	contentType := header.Header.Get("Content-Type")
+	contentType := r.Header.Get("Content-Type")
 	accepted := []string{
 		"image/jpeg",
 		"image/png",
@@ -1874,7 +1875,7 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	_, err = io.Copy(file, upload)
+	_, err = io.Copy(file, r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, "Unable to write to image file on server")
@@ -1895,7 +1896,7 @@ func respondToUploadProfilePic(w http.ResponseWriter, r *http.Request) {
 func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL.Path
 	split := strings.Split(requestURL, "/")
-	if len(split) != 3 {
+	if len(split) != 4 {
 		serveBadRequest(w, r)
 		return
 	}
@@ -1910,21 +1911,22 @@ func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 
 	userID := (*claims)["id"].(string)
 
-	upload, header, err := r.FormFile("pic")
+	cl := r.Header.Get("Content-Length")
+	size, err := strconv.Atoi(cl)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, "Failed to read image data")
+		fmt.Fprint(w, "Unable to read the size of your file")
 		return
 	}
 
 	// Max 30 MB
-	if header.Size > 30*1000*1000 {
+	if size > 30*1000*1000 {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, "Your file can be at most 30 MB (million bytes).")
 		return
 	}
 
-	filename := userID + "_" + header.Filename
+	filename := userID + "_" + split[3]
 	location := "uploads/" + filename
 	file, err := os.Create(location)
 	if err != nil {
@@ -1934,7 +1936,7 @@ func respondToUploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	_, err = io.Copy(file, upload)
+	_, err = io.Copy(file, r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, "Unable to write to file on server")

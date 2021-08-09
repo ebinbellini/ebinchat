@@ -1316,12 +1316,9 @@ function create_settings_window() {
 }
 
 function upload_profile_pic(input) {
-	const data = new FormData();
-	data.append("pic", input.files[0]);
-
 	fetch("/uploadprofilepic/" + jwt_token, {
 		method: "post",
-		body: data
+		body: input.files[0]
 	}).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
@@ -1879,14 +1876,11 @@ function create_a_textarea() {
 }
 
 function upload_chat_file(input) {
-	const data = new FormData();
-	data.append("pic", input.files[0]);
-
 	display_snackbar("Uploading your file...");
 
-	fetch(`/uploadfile/${jwt_token}`, {
+	fetch(`/uploadfile/${jwt_token}/${input.files[0].name}`, {
 		method: "post",
-		body: data
+		body: input.files[0]
 	}).then(resp => {
 		resp.text().then(text => {
 			if (resp.ok) {
