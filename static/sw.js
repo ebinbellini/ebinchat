@@ -92,10 +92,6 @@ self.addEventListener("install", event => {
 self.addEventListener("message", message => {
 	const data = message.data;
 
-	console.log(message);
-	console.log(data.subject)
-
-	console.log(data.subject === "E2EEK")
 	if (data.subject === "E2EEK") {
 		encryption_keys[data.name] = data.value;
 	}

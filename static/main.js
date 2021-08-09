@@ -1041,7 +1041,6 @@ async function request_notification_permission(group_data) {
 		userVisibleOnly: true,
 		applicationServerKey: applicationServerKey
 	}).then(subscription => {
-		console.log('User is subscribed:', subscription);
 		send_subscription_to_server(subscription, group_data);
 	}).catch(e => {
 		display_snackbar("Unable to register push notification subscription. Check your connection!")
