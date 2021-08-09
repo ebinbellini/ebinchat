@@ -211,7 +211,7 @@ func openMySQLDatabase() {
 		image TEXT,
 		is_direct BOOLEAN,
 		message_count INT,
-		last_message VARCHAR(60) NOT NULL,
+		last_message VARCHAR(1024) NOT NULL,
 		last_message_sender VARCHAR(25),
 		last_event_time DATETIME,
 		created_at DATETIME,
