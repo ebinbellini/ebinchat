@@ -444,7 +444,12 @@ function create_contact_button(data) {
 	}
 
 	last_message_text = last_message_text.split("\n")[0];
-	last_message.innerText = `${data.lastMessageSender}: ${last_message_text}`;
+
+	if (data.lastMessageSender) {
+		last_message.innerText = `${data.lastMessageSender}: ${last_message_text}`;
+	} else {
+		last_message.innerText = `${last_message_text}`;
+	}
 
 	return contact;
 }
